@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Profile — Procurement Intelligence{% endblock %}
+{% block topbar_title %}My Profile{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-text">
+    <h1 class="page-title">My Profile</h1>
+    <p class="page-subtitle">Your account information.</p>
+  </div>
+</div>
+
+<div class="panel" style="max-width:600px;">
+  <div class="kv-grid" style="grid-template-columns:1fr;">
+    <div class="kv-item">
+      <div class="kv-label">Username</div>
+      <div class="kv-value">{{ user.username }}</div>
+    </div>
+    <div class="kv-item">
+      <div class="kv-label">Email</div>
+      <div class="kv-value">{{ user.email|default:"—" }}</div>
+    </div>
+    <div class="kv-item">
+      <div class="kv-label">Role</div>
+      <div class="kv-value"><span class="badge badge-info">{{ user.get_role_display }}</span></div>
+    </div>
+    <div class="kv-item">
+      <div class="kv-label">Date Joined</div>
+      <div class="kv-value">{{ user.date_joined|date:"d M Y" }}</div>
+    </div>
+    <div class="kv-item">
+      <div class="kv-label">Last Login</div>
+      <div class="kv-value">{{ user.last_login|date:"d M Y H:i"|default:"—" }}</div>
+    </div>
+  </div>
+</div>
+{% endblock %}

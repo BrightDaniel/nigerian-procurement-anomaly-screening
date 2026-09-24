@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Users — Procurement Intelligence{% endblock %}
+{% block topbar_title %}User Management{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-text">
+    <h1 class="page-title">Users</h1>
+    <p class="page-subtitle">Manage system user accounts.</p>
+  </div>
+  <div class="page-actions">
+    <a href="{% url "admin_user_create" %}" class="btn btn-primary"><i class="bi bi-person-plus"></i> New User</a>
+  </div>
+</div>
+
+<div class="table-wrapper">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Username</th>
+        <th>Email</th>
+        <th>Role</th>
+        <th>Joined</th>
+        <th>Last Login</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>{{ u.username }}</td>
+        <td>{{ u.email|default:"—" }}</td>
+        <td><span class="badge badge-info">{{ u.get_role_display }}</span></td>
+        <td>{{ u.date_joined|date:"d M Y" }}</td>
+        <td>{{ u.last_login|date:"d M Y H:i"|default:"—" }}</td>
+        <td>
+          <a href="{% url "admin_user_edit" u.pk %}" class="btn btn-tertiary btn-sm"><i class="bi bi-pencil"></i> Edit</a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="6" style="text-align:center; color:var(--color-text-muted); padding:var(--space-5);">No users found.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

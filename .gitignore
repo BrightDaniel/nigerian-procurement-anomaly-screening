@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Django
+*.log
+db.sqlite3
+*.sqlite3
+media/
+staticfiles/
+
+# Data (large files — not version controlled)
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/README.md
+data/processed/*
+!data/processed/.gitkeep
+!data/processed/README.md
+data/synthetic/*
+!data/synthetic/.gitkeep
+!data/synthetic/README.md
+data/snapshots/*
+!data/snapshots/.gitkeep
+
+# ML artifacts
+ml/artifacts/*
+!ml/artifacts/.gitkeep
+ml/notebooks/.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage / testing
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+.pytest_cache/
+
+# Private / internal planning material (not for public repo)
+CONVERSATION_SUMMARY.md
+docs/plan/LOG.md
+docs/plan/final.md

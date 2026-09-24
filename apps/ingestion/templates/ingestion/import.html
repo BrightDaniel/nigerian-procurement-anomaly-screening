@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Import Dataset — Procurement Intelligence{% endblock %}
+{% block topbar_title %}Import Dataset{% endblock %}
+{% block topbar_breadcrumb %}
+  <span class="topbar-breadcrumb-sep">/</span>
+  <span>System</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-text">
+    <h1 class="page-title">Import Dataset</h1>
+    <p class="page-subtitle">Upload a procurement CSV or download from the OCP Data Registry.</p>
+  </div>
+</div>
+
+<div class="panel" style="max-width: 720px;">
+  <div class="panel-header">
+    <h3 class="panel-title">Upload CSV</h3>
+  </div>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+
+    <div style="margin-bottom: var(--space-4);">
+      <label class="form-label" for="csv_file">Select CSV file</label>
+      <input type="file" name="csv_file" id="csv_file" accept=".csv"
+             class="form-control"
+             style="padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); width: 100%; font-family: var(--font-mono); font-size: var(--text-small);">
+    </div>
+
+    <div style="display: flex; gap: var(--space-3); align-items: center; margin-bottom: var(--space-4);">
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-upload"></i> Upload &amp; Import
+      </button>
+      <span style="color: var(--color-text-muted); font-size: var(--text-small);">— or —</span>
+      <button type="submit" name="use_ocp" value="1" class="btn btn-outline">
+        <i class="bi bi-cloud-download"></i> Download from OCP
+      </button>
+    </div>
+  </form>
+
+  {% if error %}
+  <div class="alert alert-error" style="margin-top: var(--space-4);">
+    <i class="bi bi-exclamation-triangle"></i>
+    <strong>Import failed:</strong> {{ error }}
+  </div>
+  {% endif %}
+
+  {% if stats %}
+  <div style="margin-top: var(--space-5);">
+    <h3 style="font-size: var(--text-h3); color: var(--color-text); margin-bottom: var(--space-3);">Import Results</h3>
+
+    <div class="stat-grid" style="margin-bottom: var(--space-4);">
+      <div class="stat-card">
+        <div class="stat-value">{{ stats.import.total }}</div>
+        <div class="stat-label">Rows Processed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ stats.import.imported }}</div>
+        <div class="stat-label">Records Imported</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ stats.import.skipped }}</div>
+        <div class="stat-label">Skipped</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ stats.import.errors }}</div>
+        <div class="stat-label">Errors</div>
+      </div>
+    </div>
+
+    <div class="stat-grid" style="margin-bottom: var(--space-4);">
+      <div class="stat-card">
+        <div class="stat-value">{{ stats.validation.total }}</div>
+        <div class="stat-label">Validated</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ stats.validation.valid }}</div>
+        <div class="stat-label">Valid Records</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ stats.validation.invalid }}</div>
+        <div class="stat-label">Rejected</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ stats.validation.contracts_created }}</div>
+        <div class="stat-label">Contracts Created</div>
+      </div>
+    </div>
+
+    {% if stats.validation.errors %}
+    <div class="alert alert-warning">
+      <strong>{{ stats.validation.errors|length }} validation issues found.</strong>
+      Check the server log for details.
+    </div>
+    {% endif %}
+
+    <div class="alert alert-success">
+      <i class="bi bi-check-circle"></i>
+      Import completed successfully. {{ stats.validation.contracts_created }} contracts are now available for analysis.
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="panel" style="max-width: 720px; margin-top: var(--space-4);">
+  <div class="panel-header">
+    <h3 class="panel-title">Data Source</h3>
+  </div>
+  <div style="font-size: var(--text-body); color: var(--color-text-secondary); line-height: var(--leading-relaxed);">
+    <p><strong>Source:</strong> OCP Data Registry — Publication 64 (Nigeria BPP)</p>
+    <p><strong>Format:</strong> CSV (full.csv.tar.gz bundle, ~22MB compressed)</p>
+    <p><strong>URL:</strong> <a href="https://data.open-contracting.org/en/publication/64" target="_blank" style="color: var(--color-primary-600);">data.open-contracting.org</a></p>
+    <hr style="border: none; border-top: 1px solid var(--color-border); margin: var(--space-3) 0;">
+    <p style="font-size: var(--text-small); color: var(--color-text-muted);">Known dataset properties:</p>
+    <ul style="font-size: var(--text-small); color: var(--color-text-muted); margin: 0; padding-left: var(--space-4);">
+      <li>Some award dates have outlier years (1949, 2919)</li>
+      <li>93 records have incorrect OCID prefix</li>
+      <li>Contract category field is not populated in this dataset</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

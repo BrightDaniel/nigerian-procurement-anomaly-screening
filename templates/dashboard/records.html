@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Records — Procurement Intelligence{% endblock %}
+{% block topbar_title %}Records{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-text">
+    <h1 class="page-title">Records <span class="page-count">({{ total_count }})</span></h1>
+    <p class="page-subtitle">Browse all imported procurement contracts.</p>
+  </div>
+</div>
+
+{# ─── Filter Bar ─── #}
+<form method="get" class="filter-bar">
+  <input type="text" name="search" class="form-control search-input" placeholder="Search title, ID, description, NOCOPO..." value="{{ current_search }}">
+
+  <select name="entity" class="form-select">
+    <option value="">All Entities</option>
+    {% for e in all_entities %}
+    <option value="{{ e.entity_id }}" {% if current_entity == e.entity_id|stringformat:"d" %}selected{% endif %}>{{ e.name|truncatechars:40 }}</option>
+    {% endfor %}
+  </select>
+
+  <select name="vendor" class="form-select">
+    <option value="">All Vendors</option>
+    {% for v in all_vendors %}
+    <option value="{{ v.vendor_id }}" {% if current_vendor == v.vendor_id|stringformat:"d" %}selected{% endif %}>{{ v.name|truncatechars:40 }}</option>
+    {% endfor %}
+  </select>
+
+  <select name="method" class="form-select">
+    <option value="">All Methods</option>
+    {% for m in all_methods %}
+    <option value="{{ m }}" {% if current_method == m %}selected{% endif %}>{{ m }}</option>
+    {% endfor %}
+  </select>
+
+  <select name="category" class="form-select">
+    <option value="">All Categories</option>
+    {% for c in all_categories %}
+    <option value="{{ c }}" {% if current_category == c %}selected{% endif %}>{{ c }}</option>
+    {% endfor %}
+  </select>
+
+  <select name="flagged" class="form-select">
+    <option value="">All Status</option>
+    <option value="yes" {% if current_flagged == 'yes' %}selected{% endif %}>Flagged</option>
+    <option value="no" {% if current_flagged == 'no' %}selected{% endif %}>Not Flagged</option>
+  </select>
+
+  <div class="date-group">
+    <label>From</label>
+    <input type="date" name="date_from" class="form-control" value="{{ current_date_from }}">
+    <label>To</label>
+    <input type="date" name="date_to" class="form-control" value="{{ current_date_to }}">
+  </div>
+
+  <div class="filter-actions">
+    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i> Apply</button>
+    <a href="{% url "dashboard:records" %}" class="btn btn-secondary btn-sm"><i class="bi bi-x-circle"></i> Reset</a>
+  </div>
+</form>
+
+{% if records_list %}
+{# ─── Data Table ─── #}
+<div class="table-wrapper">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Title</th>
+        <th>Entity</th>
+        <th>Vendor</th>
+        <th class="num">Amount</th>
+        <th>Method</th>
+        <th>
+          <a href="?sort={% if current_sort == 'date_desc' %}date_asc{% else %}date_desc{% endif %}&search={{ current_search }}&entity={{ current_entity }}&vendor={{ current_vendor }}&method={{ current_method }}&category={{ current_category }}&flagged={{ current_flagged }}&date_from={{ current_date_from }}&date_to={{ current_date_to }}" class="{% if 'date' in current_sort %}active{% endif %}">
+            Date <i class="bi bi-arrow-down-up sort-icon"></i>
+          </a>
+        </th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in records_list %}
+      <tr class="{% if r.has_flag %}row-flagged{% endif %}">
+        <td class="mono">{{ r.contract_id }}</td>
+        <td class="text-truncate">{{ r.title }}</td>
+        <td>{{ r.entity }}</td>
+        <td>{{ r.vendor }}</td>
+        <td class="num">{{ r.amount }}</td>
+        <td>{{ r.method }}</td>
+        <td>{{ r.award_date|date:"d M Y"|default:"—" }}</td>
+        <td>
+          {% if r.has_flag %}
+          <span class="badge badge-high">Flagged</span>
+          {% else %}
+          <span class="badge badge-neutral">Normal</span>
+          {% endif %}
+        </td>
+        <td>
+          <a href="{% url "dashboard:record_detail" r.contract_id %}" class="btn btn-tertiary btn-sm">
+            <i class="bi bi-arrow-right"></i>
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% include "includes/pagination.html" %}
+
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon"><i class="bi bi-table"></i></div>
+  <h2 class="empty-state-title">No Records</h2>
+  {% if current_search or current_entity or current_vendor or current_method or current_category or current_flagged or current_date_from or current_date_to %}
+  <p class="empty-state-text">No records match your current filters. Try adjusting your search criteria.</p>
+  <a href="{% url "dashboard:records" %}" class="btn btn-secondary" style="margin-top:var(--space-3);"><i class="bi bi-x-circle"></i> Clear Filters</a>
+  {% else %}
+  <p class="empty-state-text">Import an OCP Data Registry CSV to populate the records table.</p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

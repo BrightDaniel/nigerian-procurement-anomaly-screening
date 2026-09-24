@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block title %}Record {{ contract.contract_id }} — Procurement Intelligence{% endblock %}
+{% block topbar_title %}Record Detail{% endblock %}
+{% block topbar_breadcrumb %}
+<span class="topbar-sep">/</span>
+<a href="{% url "dashboard:records" %}" class="topbar-breadcrumb">Records</a>
+<span class="topbar-sep">/</span>
+<span class="topbar-breadcrumb">{{ contract.contract_id }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-text">
+    <div style="display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-2);">
+      <h1 class="page-title" style="font-size:var(--text-h2);">Contract {{ contract.contract_id }}</h1>
+      {% if has_anomaly %}
+      <span class="badge badge-{{ priority }}">{{ priority_label }}</span>
+      {% else %}
+      <span class="badge badge-neutral">Normal</span>
+      {% endif %}
+    </div>
+    <p class="page-subtitle">{{ contract.title }}</p>
+  </div>
+  <div class="page-actions">
+    <a href="{% url "dashboard:records" %}" class="btn btn-secondary">
+      <i class="bi bi-arrow-left"></i> Back to Records
+    </a>
+    {% if has_anomaly %}
+    <a href="{% url "dashboard:anomaly_detail" contract.contract_id %}" class="btn btn-primary">
+      <i class="bi bi-exclamation-triangle"></i> View Anomaly Detail
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="detail-grid" style="display:grid; grid-template-columns:2fr 1fr; gap:var(--space-4);">
+  {# ─── Left Column ─── #}
+  <div style="display:flex; flex-direction:column; gap:var(--space-4);">
+
+    {# Procurement Fields #}
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Procurement Details</h2>
+      </div>
+      <div class="kv-grid" style="grid-template-columns:1fr 1fr;">
+        <div class="kv-item">
+          <div class="kv-label">Title</div>
+          <div class="kv-value" style="grid-column:1/-1;">{{ contract.title }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Description</div>
+          <div class="kv-value" style="grid-column:1/-1; font-size:var(--text-small); color:var(--color-text-secondary);">{{ contract.description|default:"—" }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Procuring Entity</div>
+          <div class="kv-value">{{ contract.entity.name|default:"—" }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Vendor</div>
+          <div class="kv-value">{{ contract.vendor.name|default:"—" }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Contract Value</div>
+          <div class="kv-value" style="font-family:var(--font-mono);">₦{{ contract.amount|default:"—" }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Currency</div>
+          <div class="kv-value">{{ contract.currency|default:"—" }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Award Date</div>
+          <div class="kv-value">{{ contract.award_date|date:"d M Y"|default:"—" }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Method</div>
+          <div class="kv-value">{{ contract.method|default:"—" }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Category</div>
+          <div class="kv-value">{{ contract.category|default:"—" }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Number of Bidders</div>
+          <div class="kv-value">{{ contract.num_bidders|default:"—" }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Bidding Window (days)</div>
+          <div class="kv-value">{{ contract.bidding_window_days|default:"—" }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">NOCOPO ID</div>
+          <div class="kv-value mono" style="font-size:var(--text-caption);">{{ contract.nocopo_id|default:"—" }}</div>
+        </div>
+      </div>
+    </div>
+
+    {# Anomaly Assessment (if flagged) #}
+    {% if has_anomaly %}
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Anomaly Assessment</h2>
+      </div>
+      <div class="score-display" style="margin-bottom:var(--space-4);">
+        <span class="score-main" style="color:{% if priority == 'high' %}var(--color-priority-high){% elif priority == 'medium' %}var(--color-priority-med){% else %}var(--color-text){% endif %};">
+          {{ flag.risk_score }}
+        </span>
+        <div class="score-meta">
+          <div class="score-meta-item">
+            <span class="score-meta-label">Rank</span>
+            <span class="score-meta-value">#{{ rank }} of {{ total_anomalies }}</span>
+          </div>
+          <div class="score-meta-item">
+            <span class="score-meta-label">Model</span>
+            <span class="score-meta-value">{{ flag.model_used|default:"—" }}</span>
+          </div>
+          <div class="score-meta-item">
+            <span class="score-meta-label">Flagged</span>
+            <span class="score-meta-value">{{ flag.created_at|date:"d M Y H:i" }}</span>
+          </div>
+        </div>
+      </div>
+
+      {% if nl_explanation %}
+      <div style="margin-bottom:var(--space-3);">
+        <div class="kv-label" style="margin-bottom:var(--space-1);">Explanation</div>
+        <p style="line-height:var(--leading-relaxed);">{{ nl_explanation }}</p>
+      </div>
+      {% endif %}
+
+      {% if contributions %}
+      <div class="contribution-list">
+        {% for c in contributions %}
+        <div class="contribution-item">
+          <span class="contribution-name">{{ c.name }}</span>
+          <div class="contribution-bar-track">
+            <div class="contribution-bar-fill {{ c.direction }}" style="width:{{ c.bar_width }}%;"></div>
+          </div>
+          <span class="contribution-level {% if c.level == 'High' %}high{% elif c.level == 'Moderate' %}medium{% else %}low{% endif %}">
+            {{ c.level }}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  {# ─── Right Column ─── #}
+  <div style="display:flex; flex-direction:column; gap:var(--space-4);">
+
+    {# Feature Values #}
+    {% if has_features %}
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Feature Values</h2>
+      </div>
+      <div class="kv-grid" style="grid-template-columns:1fr;">
+        <div class="kv-item">
+          <div class="kv-label">Log Contract Value</div>
+          <div class="kv-value mono">{{ feature.log_contract_value|default:"—" }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Single Bidder</div>
+          <div class="kv-value">{% if feature.single_bidder_flag %}Yes{% else %}No{% endif %}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Vendor Win Frequency</div>
+          <div class="kv-value mono">{{ feature.vendor_win_frequency|default:"—" }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Splitting Flag</div>
+          <div class="kv-value">{% if feature.splitting_flag %}Yes ({{ feature.splitting_count }} similar){% else %}No{% endif %}</div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {# Quick Actions #}
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Actions</h2>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:var(--space-2);">
+        {% if has_anomaly %}
+        <a href="{% url "dashboard:anomaly_detail" contract.contract_id %}" class="btn btn-secondary btn-sm" style="justify-content:flex-start;">
+          <i class="bi bi-exclamation-triangle"></i> View Anomaly Detail
+        </a>
+        <a href="{% url "reporting:report_detail" contract.contract_id %}" class="btn btn-secondary btn-sm" style="justify-content:flex-start;">
+          <i class="bi bi-file-earmark-text"></i> View Investigation Report
+        </a>
+        {% else %}
+        <p class="text-muted" style="font-size:var(--text-small);">This record has not been flagged for review.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}Model Performance — Procurement Intelligence{% endblock %}
+{% block topbar_title %}Model Performance{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-text">
+    <h1 class="page-title">Model Performance</h1>
+    <p class="page-subtitle">Evaluation metrics and diagnostics for the anomaly detection models.</p>
+  </div>
+</div>
+
+{% if has_models %}
+<div class="chart-grid">
+  {% for model in models_stats %}
+  <div class="panel">
+    <div class="panel-header">
+      <h3 class="panel-title">{{ model.model_name }}</h3>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value">{{ model.total_records }}</div>
+        <div class="stat-label">Total Records</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ model.anomaly_count }}</div>
+        <div class="stat-label">Anomalies Flagged</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ model.anomaly_rate }}%</div>
+        <div class="stat-label">Anomaly Rate</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ model.avg_score }}</div>
+        <div class="stat-label">Average Score</div>
+      </div>
+    </div>
+
+    <div style="margin-top: var(--space-4);">
+      <h4 style="font-size: var(--text-body); color: var(--color-text-secondary); margin-bottom: var(--space-3);">Priority Breakdown</h4>
+      <div style="display: flex; gap: var(--space-3);">
+        <div class="badge badge-high">High: {{ model.high_priority }}</div>
+        <div class="badge badge-medium">Medium: {{ model.medium_priority }}</div>
+        <div class="badge badge-normal">Normal: {{ model.normal_priority }}</div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="panel" style="margin-top: var(--space-5);">
+  <div class="panel-header">
+    <h3 class="panel-title">Score Distribution Comparison</h3>
+  </div>
+  <div class="chart-container">
+    <canvas id="performanceChart"></canvas>
+  </div>
+</div>
+
+{% if has_eval %}
+<div class="panel" style="margin-top: var(--space-5);">
+  <div class="panel-header">
+    <h3 class="panel-title">Synthetic Anomaly Evaluation</h3>
+  </div>
+  <p style="font-size: var(--text-small); color: var(--color-text-muted); margin-bottom: var(--space-3);">
+    Evaluation against synthetically injected anomalies (5% mixed strategy). This creates a known ground-truth set for measuring detection performance.
+  </p>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Model</th>
+        <th>Precision</th>
+        <th>Recall</th>
+        <th>F1</th>
+        <th>True Positives</th>
+        <th>False Positives</th>
+        <th>False Negatives</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if eval_results.if_synth %}
+      <tr>
+        <td><span class="badge badge-info">Isolation Forest</span></td>
+        <td class="num">{{ eval_results.if_synth.precision|floatformat:4 }}</td>
+        <td class="num">{{ eval_results.if_synth.recall|floatformat:4 }}</td>
+        <td class="num">{{ eval_results.if_synth.f1|floatformat:4 }}</td>
+        <td class="num">{{ eval_results.if_synth.tp }}</td>
+        <td class="num">{{ eval_results.if_synth.fp }}</td>
+        <td class="num">{{ eval_results.if_synth.fn }}</td>
+      </tr>
+      {% endif %}
+      {% if eval_results.lof_synth %}
+      <tr>
+        <td><span class="badge badge-info">Local Outlier Factor</span></td>
+        <td class="num">{{ eval_results.lof_synth.precision|floatformat:4 }}</td>
+        <td class="num">{{ eval_results.lof_synth.recall|floatformat:4 }}</td>
+        <td class="num">{{ eval_results.lof_synth.f1|floatformat:4 }}</td>
+        <td class="num">{{ eval_results.lof_synth.tp }}</td>
+        <td class="num">{{ eval_results.lof_synth.fp }}</td>
+        <td class="num">{{ eval_results.lof_synth.fn }}</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if has_sensitivity %}
+<div class="panel" style="margin-top: var(--space-5);">
+  <div class="panel-header">
+    <h3 class="panel-title">Contamination Sensitivity</h3>
+  </div>
+  <p style="font-size: var(--text-small); color: var(--color-text-muted); margin-bottom: var(--space-3);">
+    How the number of flagged anomalies changes with the contamination parameter (Isolation Forest).
+  </p>
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Contamination</th>
+        <th>Records Analysed</th>
+        <th>Anomalies Flagged</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cont, data in sensitivity_data.items %}
+      <tr>
+        <td class="num">{{ cont }}</td>
+        <td class="num">{{ data.n_samples }}</td>
+        <td class="num">{{ data.n_anomalies }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const scoreRanges = {{ score_ranges|safe }};
+  const distributionData = {{ distribution_data|safe }};
+
+  const colors = {
+    isolation_forest: 'rgba(72, 101, 129, 0.7)',
+    local_outlier_factor: 'rgba(196, 66, 26, 0.7)',
+  };
+
+  const datasets = [];
+  for (const [model, data] of Object.entries(distributionData)) {
+    datasets.push({
+      label: model.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      data: data,
+      backgroundColor: colors[model] || 'rgba(98, 125, 152, 0.7)',
+      borderColor: colors[model] || 'rgba(98, 125, 152, 1)',
+      borderWidth: 1,
+    });
+  }
+
+  new Chart(document.getElementById('performanceChart'), {
+    type: 'bar',
+    data: {
+      labels: scoreRanges,
+      datasets: datasets,
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'top',
+        },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          title: {
+            display: true,
+            text: 'Number of Records',
+          },
+        },
+        x: {
+          title: {
+            display: true,
+            text: 'Anomaly Score Range',
+          },
+        },
+      },
+    },
+  });
+});
+</script>
+
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon"><i class="bi bi-bar-chart-line"></i></div>
+  <h2 class="empty-state-title">No Models Trained</h2>
+  <p class="empty-state-text">Train a model to see performance metrics here.</p>
+  <p class="empty-state-text" style="font-size: var(--text-small); color: var(--color-text-muted); margin-top: var(--space-2);">
+    Use <code style="font-family: var(--font-mono); background: var(--color-surface-alt); padding: 2px 6px; border-radius: var(--radius-sm);">python manage.py run_detection</code> to execute a model.
+  </p>
+</div>
+{% endif %}
+{% endblock %}

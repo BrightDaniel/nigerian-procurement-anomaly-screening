@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}User — {{ target_user.username }}{% endblock %}
+{% block topbar_title %}User Details{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-text">
+    <h1 class="page-title">{{ target_user.username }}</h1>
+    <p class="page-subtitle">User account details and management.</p>
+  </div>
+  <div class="page-actions">
+    <a href="{% url "admin_users" %}" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Back to Users</a>
+  </div>
+</div>
+
+<div class="panel" style="max-width:600px;">
+  <div class="kv-grid" style="grid-template-columns:1fr;">
+    <div class="kv-item">
+      <div class="kv-label">Username</div>
+      <div class="kv-value">{{ target_user.username }}</div>
+    </div>
+    <div class="kv-item">
+      <div class="kv-label">Email</div>
+      <div class="kv-value">{{ target_user.email|default:"—" }}</div>
+    </div>
+    <div class="kv-item">
+      <div class="kv-label">Role</div>
+      <div class="kv-value"><span class="badge badge-info">{{ target_user.get_role_display }}</span></div>
+    </div>
+    <div class="kv-item">
+      <div class="kv-label">Status</div>
+      <div class="kv-value">
+        {% if target_user.is_active %}
+        <span class="badge badge-normal">Active</span>
+        {% else %}
+        <span class="badge badge-high">Inactive</span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="kv-item">
+      <div class="kv-label">Date Joined</div>
+      <div class="kv-value">{{ target_user.date_joined|date:"d M Y H:i" }}</div>
+    </div>
+    <div class="kv-item">
+      <div class="kv-label">Last Login</div>
+      <div class="kv-value">{{ target_user.last_login|date:"d M Y H:i"|default:"Never" }}</div>
+    </div>
+  </div>
+
+  <div style="margin-top:var(--space-4); display:flex; gap:var(--space-3);">
+    {% if target_user != user %}
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="toggle_active">
+      {% if target_user.is_active %}
+      <button type="submit" class="btn btn-secondary btn-sm" onclick="return confirm('Deactivate this user?')">
+        <i class="bi bi-person-x"></i> Deactivate
+      </button>
+      {% else %}
+      <button type="submit" class="btn btn-sm" style="background:var(--color-success);color:white;" onclick="return confirm('Activate this user?')">
+        <i class="bi bi-person-check"></i> Activate
+      </button>
+      {% endif %}
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

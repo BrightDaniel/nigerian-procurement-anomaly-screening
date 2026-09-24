@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Login — Procurement Intelligence{% endblock %}
+{% block topbar_title %}Sign In{% endblock %}
+
+{% block content %}
+<div style="max-width:400px; margin:var(--space-7) auto;">
+  <div class="panel" style="text-align:center; padding:var(--space-6);">
+    <div style="font-size:2rem; color:var(--color-primary-600); margin-bottom:var(--space-3);">
+      <i class="bi bi-shield-check"></i>
+    </div>
+    <h1 style="font-size:var(--text-h2); margin-bottom:var(--space-1);">Sign In</h1>
+    <p style="color:var(--color-text-secondary); margin-bottom:var(--space-5);">Procurement Intelligence System</p>
+
+    {% if form.non_field_errors %}
+    <div class="alert alert-error" style="text-align:left; margin-bottom:var(--space-4);">
+      <i class="bi bi-x-circle"></i>
+      <div>
+        {% for error in form.non_field_errors %}
+        <div>{{ error }}</div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <form method="post" style="text-align:left;">
+      {% csrf_token %}
+      <div style="margin-bottom:var(--space-4);">
+        <label for="id_username" class="form-label">Username</label>
+        <input type="text" name="username" id="id_username" class="form-control" placeholder="Enter your username" autofocus required>
+        {% for field in form %}
+        {% if field.name == 'username' and field.errors %}
+        <div class="invalid-feedback" style="display:block;">{{ field.errors.0 }}</div>
+        {% endif %}
+        {% endfor %}
+      </div>
+      <div style="margin-bottom:var(--space-5);">
+        <label for="id_password" class="form-label">Password</label>
+        <input type="password" name="password" id="id_password" class="form-control" placeholder="Enter your password" required>
+        {% for field in form %}
+        {% if field.name == 'password' and field.errors %}
+        <div class="invalid-feedback" style="display:block;">{{ field.errors.0 }}</div>
+        {% endif %}
+        {% endfor %}
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center;">
+        <i class="bi bi-box-arrow-in-right"></i> Sign In
+      </button>
+    </form>
+
+    <p style="color:var(--color-text-muted); font-size:var(--text-small); margin-top:var(--space-4);">
+      Don't have an account? Contact your administrator.
+    </p>
+  </div>
+</div>
+{% endblock %}

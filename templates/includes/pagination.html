@@ -1,0 +1,33 @@
+{% if page_obj.has_other_pages %}
+<nav style="display:flex; align-items:center; justify-content:space-between; margin-top:var(--space-4); padding:var(--space-3) 0; border-top:1px solid var(--color-border-light);">
+  <span style="font-size:var(--text-small); color:var(--color-text-muted);">
+    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+    <span style="margin-left:var(--space-2);">({{ page_obj.paginator.count }} records)</span>
+  </span>
+  <div style="display:flex; align-items:center; gap:var(--space-1);">
+    {% if page_obj.has_previous %}
+      <a href="?{{ request.GET.urlencode }}&page={{ page_obj.previous_page_number }}" class="page-link">
+        <i class="bi bi-chevron-left"></i> Prev
+      </a>
+    {% else %}
+      <span class="page-link" style="opacity:0.4; cursor:default;"><i class="bi bi-chevron-left"></i> Prev</span>
+    {% endif %}
+
+    {% for num in page_obj.paginator.page_range %}
+      {% if page_obj.number == num %}
+        <span class="page-item active"><span class="page-link">{{ num }}</span></span>
+      {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+        <a href="?{{ request.GET.urlencode }}&page={{ num }}" class="page-link">{{ num }}</a>
+      {% endif %}
+    {% endfor %}
+
+    {% if page_obj.has_next %}
+      <a href="?{{ request.GET.urlencode }}&page={{ page_obj.next_page_number }}" class="page-link">
+        Next <i class="bi bi-chevron-right"></i>
+      </a>
+    {% else %}
+      <span class="page-link" style="opacity:0.4; cursor:default;">Next <i class="bi bi-chevron-right"></i></span>
+    {% endif %}
+  </div>
+</nav>
+{% endif %}

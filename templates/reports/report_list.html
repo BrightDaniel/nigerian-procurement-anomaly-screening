@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Investigation Reports — Procurement Intelligence{% endblock %}
+{% block topbar_title %}Investigation Reports{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-text">
+    <h1 class="page-title">Investigation Reports <span class="page-count">({{ total_count }})</span></h1>
+    <p class="page-subtitle">Completed investigation reports for flagged procurement records.</p>
+  </div>
+</div>
+
+{# ─── Filter Bar ─── #}
+<form method="get" class="filter-bar">
+  <input type="text" name="search" class="form-control search-input" placeholder="Search title, ID, entity, vendor..." value="{{ current_search }}">
+
+  <select name="priority" class="form-select">
+    <option value="">All Priorities</option>
+    <option value="high" {% if current_priority == 'high' %}selected{% endif %}>High</option>
+    <option value="medium" {% if current_priority == 'medium' %}selected{% endif %}>Medium</option>
+    <option value="normal" {% if current_priority == 'normal' %}selected{% endif %}>Normal</option>
+  </select>
+
+  <select name="entity" class="form-select">
+    <option value="">All Entities</option>
+    {% for e in all_entities %}
+    <option value="{{ e.entity_id }}" {% if current_entity == e.entity_id|stringformat:"d" %}selected{% endif %}>{{ e.name|truncatechars:40 }}</option>
+    {% endfor %}
+  </select>
+
+  <div class="filter-actions">
+    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i> Apply</button>
+    <a href="{% url "reporting:report_list" %}" class="btn btn-secondary btn-sm"><i class="bi bi-x-circle"></i> Reset</a>
+  </div>
+</form>
+
+{% if report_list %}
+{# ─── Data Table ─── #}
+<div class="table-wrapper">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Contract ID</th>
+        <th>Title</th>
+        <th>Entity</th>
+        <th>Vendor</th>
+        <th class="num">Amount</th>
+        <th class="num">Score</th>
+        <th>Priority</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in report_list %}
+      <tr>
+        <td class="mono">{{ r.contract_id }}</td>
+        <td class="text-truncate">{{ r.title }}</td>
+        <td>{{ r.entity }}</td>
+        <td>{{ r.vendor }}</td>
+        <td class="num">{{ r.amount }}</td>
+        <td class="num" style="font-weight:var(--weight-semibold); color:{% if r.priority == 'high' %}var(--color-priority-high){% elif r.priority == 'medium' %}var(--color-priority-med){% else %}var(--color-text-secondary){% endif %};">
+          {{ r.score }}
+        </td>
+        <td><span class="badge badge-{{ r.priority }}">{{ r.priority_label }}</span></td>
+        <td>
+          {% if r.has_report %}
+          <span class="badge badge-normal">Reported</span>
+          {% else %}
+          <span class="badge badge-medium">Pending</span>
+          {% endif %}
+        </td>
+        <td>
+          <a href="{% url "reporting:report_detail" r.contract_id %}" class="btn btn-tertiary btn-sm">
+            <i class="bi bi-arrow-right"></i>
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% include "includes/pagination.html" %}
+
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon"><i class="bi bi-file-earmark-text"></i></div>
+  <h2 class="empty-state-title">No Reports</h2>
+  {% if current_search or current_priority or current_entity %}
+  <p class="empty-state-text">No reports match your current filters. Try adjusting your search criteria.</p>
+  <a href="{% url "reporting:report_list" %}" class="btn btn-secondary" style="margin-top:var(--space-3);"><i class="bi bi-x-circle"></i> Clear Filters</a>
+  {% else %}
+  <p class="empty-state-text">Create an investigation report from the Anomaly Detail screen.</p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

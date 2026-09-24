@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Create Investigation Report — {{ contract.contract_id }}{% endblock %}
+{% block topbar_title %}Create Investigation Report{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-text">
+    <h1 class="page-title">Investigation Report</h1>
+    <p class="page-subtitle">Contract {{ contract.contract_id }} — {{ contract.title }}</p>
+  </div>
+  <div class="page-actions">
+    <a href="{% url "reporting:report_detail" contract.contract_id %}" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Back to Report</a>
+  </div>
+</div>
+
+<div class="alert alert-disclaimer" style="margin-bottom:var(--space-5);">
+  <i class="bi bi-info-circle"></i>
+  <span>This form is for recording observations during investigation. An anomaly flag is <strong>not</strong> a determination of wrongdoing.</span>
+</div>
+
+<div class="panel" style="max-width:700px;">
+  <div class="panel-header">
+    <h2 class="panel-title">Investigation Notes</h2>
+  </div>
+  <form method="post" style="display:flex; flex-direction:column; gap:var(--space-4);">
+    {% csrf_token %}
+
+    <div>
+      <label class="form-label" for="finding" style="display:block; margin-bottom:var(--space-1); font-weight:500;">Finding</label>
+      <textarea name="finding" id="finding" rows="6" class="form-control" placeholder="Describe observations from the investigation..."></textarea>
+    </div>
+
+    <div>
+      <label class="form-label" for="recommendation" style="display:block; margin-bottom:var(--space-1); font-weight:500;">Recommendation</label>
+      <textarea name="recommendation" id="recommendation" rows="4" class="form-control" placeholder="Recommendation for further review or action..."></textarea>
+    </div>
+
+    <div>
+      <label class="form-label" for="status" style="display:block; margin-bottom:var(--space-1); font-weight:500;">Status</label>
+      <select name="status" id="status" class="form-control">
+        <option value="draft" selected>Draft</option>
+        <option value="reviewed">Reviewed</option>
+      </select>
+    </div>
+
+    <div style="display:flex; gap:var(--space-3);">
+      <button type="submit" class="btn"><i class="bi bi-check-lg"></i> Save Report</button>
+      <a href="{% url "reporting:report_detail" contract.contract_id %}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

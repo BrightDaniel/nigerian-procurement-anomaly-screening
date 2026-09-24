@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% block title %}Investigation Report — Contract {{ contract.contract_id }}{% endblock %}
+{% block topbar_title %}Investigation Report{% endblock %}
+{% block topbar_breadcrumb %}
+<span class="topbar-sep">/</span>
+<a href="{% url "reporting:report_list" %}" class="topbar-breadcrumb">Reports</a>
+<span class="topbar-sep">/</span>
+<span class="topbar-breadcrumb">{{ contract.contract_id }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-text">
+    <div style="display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-2);">
+      <h1 class="page-title" style="font-size:var(--text-h2);">Contract {{ contract.contract_id }}</h1>
+      <span class="badge badge-{{ priority }}">{{ priority_label }}</span>
+    </div>
+    <p class="page-subtitle">{{ contract.title }}</p>
+  </div>
+  <div class="page-actions">
+    <a href="{% url "reporting:report_create" contract.contract_id %}" class="btn">
+      <i class="bi bi-plus-lg"></i> Create Investigation Report
+    </a>
+    <a href="{% url "reporting:report_list" %}" class="btn btn-secondary">
+      <i class="bi bi-arrow-left"></i> Back to Reports
+    </a>
+  </div>
+</div>
+
+{# ─── Disclaimer ─── #}
+<div class="alert alert-disclaimer" style="margin-bottom:var(--space-5);">
+  <i class="bi bi-info-circle"></i>
+  <span>This report highlights procurement patterns for review. An anomaly flag is <strong>not</strong> a determination of wrongdoing. Scores reflect statistical deviation, not legal judgement.</span>
+</div>
+
+<div class="detail-grid" style="display:grid; grid-template-columns:2fr 1fr; gap:var(--space-4);">
+  {# ─── Left Column ─── #}
+  <div style="display:flex; flex-direction:column; gap:var(--space-4);">
+
+    {# Anomaly Score #}
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Anomaly Score</h2>
+      </div>
+      {% if has_anomaly %}
+      <div class="score-display">
+        <span class="score-main" style="color:{% if priority == 'high' %}var(--color-priority-high){% elif priority == 'medium' %}var(--color-priority-med){% else %}var(--color-text){% endif %};">
+          {{ flag.risk_score }}
+        </span>
+        <div class="score-meta">
+          <div class="score-meta-item">
+            <span class="score-meta-label">Rank</span>
+            <span class="score-meta-value">#{{ rank }} of {{ total_anomalies }}</span>
+          </div>
+          <div class="score-meta-item">
+            <span class="score-meta-label">Model</span>
+            <span class="score-meta-value">{{ flag.model_used|default:"—" }}</span>
+          </div>
+          <div class="score-meta-item">
+            <span class="score-meta-label">Flagged</span>
+            <span class="score-meta-value">{{ flag.created_at|date:"d M Y H:i" }}</span>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <p class="text-muted">No anomaly flag for this record.</p>
+      {% endif %}
+    </div>
+
+    {# NL Explanation #}
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Why This Was Flagged</h2>
+      </div>
+      {% if nl_explanation %}
+      <p style="line-height:var(--leading-relaxed);">{{ nl_explanation }}</p>
+      {% else %}
+      <p class="text-muted">No explanation available yet.</p>
+      {% endif %}
+    </div>
+
+    {# Feature Contributions #}
+    {% if contributions %}
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Feature Contributions</h2>
+        <p class="panel-subtitle">How each feature influenced the anomaly score.</p>
+      </div>
+      <div class="contribution-list">
+        {% for c in contributions %}
+        <div class="contribution-item">
+          <span class="contribution-name">{{ c.name }}</span>
+          <div class="contribution-bar-track">
+            <div class="contribution-bar-fill {{ c.direction }}" style="width:{{ c.bar_width }}%;"></div>
+          </div>
+          <span class="contribution-level {% if c.level == 'High' %}high{% elif c.level == 'Moderate' %}medium{% else %}low{% endif %}">
+            {{ c.level }}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# Investigation Reports #}
+    {% if reports %}
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Investigation Notes ({{ reports|length }})</h2>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:var(--space-4);">
+        {% for report in reports %}
+        <div style="border-left:3px solid {% if report.status == 'reviewed' %}var(--color-success){% else %}var(--color-border){% endif %}; padding-left:var(--space-3);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-2);">
+            <span style="font-weight:500;">{{ report.reviewer.get_full_name|default:report.reviewer.username }}</span>
+            <span class="badge {% if report.status == 'reviewed' %}badge-normal{% else %}badge-medium{% endif %}">{{ report.get_status_display }}</span>
+          </div>
+          {% if report.finding %}
+          <div style="margin-bottom:var(--space-2);">
+            <div style="font-size:var(--text-caption); color:var(--color-text-muted); margin-bottom:var(--space-1);">Finding</div>
+            <p style="margin:0; line-height:var(--leading-relaxed);">{{ report.finding }}</p>
+          </div>
+          {% endif %}
+          {% if report.recommendation %}
+          <div>
+            <div style="font-size:var(--text-caption); color:var(--color-text-muted); margin-bottom:var(--space-1);">Recommendation</div>
+            <p style="margin:0; line-height:var(--leading-relaxed);">{{ report.recommendation }}</p>
+          </div>
+          {% endif %}
+          <div style="font-size:var(--text-caption); color:var(--color-text-muted); margin-top:var(--space-2);">
+            {{ report.created_at|date:"d M Y H:i" }}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ─── Right Column ─── #}
+  <div style="display:flex; flex-direction:column; gap:var(--space-4);">
+
+    {# Contract Metadata #}
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Contract Details</h2>
+      </div>
+      <div class="kv-grid" style="grid-template-columns:1fr;">
+        <div class="kv-item">
+          <div class="kv-label">Procuring Entity</div>
+          <div class="kv-value">{{ contract.entity.name|default:"—" }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Vendor</div>
+          <div class="kv-value">{{ contract.vendor.name|default:"—" }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Contract Value</div>
+          <div class="kv-value" style="font-family:var(--font-mono);">₦{{ contract.amount|default:"—" }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Award Date</div>
+          <div class="kv-value">{{ contract.award_date|date:"d M Y"|default:"—" }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Method</div>
+          <div class="kv-value">{{ contract.method|default:"—" }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Number of Bidders</div>
+          <div class="kv-value">{{ contract.num_bidders|default:"—" }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">NOCOPO ID</div>
+          <div class="kv-value mono" style="font-size:var(--text-caption);">{{ contract.nocopo_id|default:"—" }}</div>
+        </div>
+      </div>
+    </div>
+
+    {# Feature Values #}
+    {% if has_features %}
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Feature Values</h2>
+      </div>
+      <div class="kv-grid" style="grid-template-columns:1fr;">
+        <div class="kv-item">
+          <div class="kv-label">Log Contract Value</div>
+          <div class="kv-value mono">{{ feature.log_contract_value|default:"—" }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Single Bidder</div>
+          <div class="kv-value">{% if feature.single_bidder_flag %}Yes{% else %}No{% endif %}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Vendor Win Frequency</div>
+          <div class="kv-value mono">{{ feature.vendor_win_frequency|default:"—" }}</div>
+        </div>
+        <div class="kv-item">
+          <div class="kv-label">Splitting Flag</div>
+          <div class="kv-value">{% if feature.splitting_flag %}Yes ({{ feature.splitting_count }} similar){% else %}No{% endif %}</div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {# Navigation #}
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Navigation</h2>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:var(--space-2);">
+        <a href="{% url "dashboard:anomaly_detail" contract.contract_id %}" class="btn btn-secondary btn-sm" style="justify-content:flex-start;">
+          <i class="bi bi-exclamation-triangle"></i> View Anomaly Detail
+        </a>
+        <a href="{% url "dashboard:record_detail" contract.contract_id %}" class="btn btn-tertiary btn-sm" style="justify-content:flex-start;">
+          <i class="bi bi-file-earmark"></i> View Record Detail
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

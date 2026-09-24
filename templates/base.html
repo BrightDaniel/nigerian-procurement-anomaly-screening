@@ -1,0 +1,134 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Procurement Intelligence{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="{% static 'css/design-system.css' %}">
+  <link rel="stylesheet" href="{% static 'css/custom.css' %}">
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+  <div class="app-layout">
+    {# ─── Sidebar ─── #}
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <i class="bi bi-shield-check"></i>
+        <span>Procurement Intelligence</span>
+      </div>
+
+      <nav>
+        {# OVERVIEW #}
+        <div class="sidebar-section">
+          <div class="sidebar-section-label">Overview</div>
+          <a href="{% url "dashboard:index" %}" class="sidebar-link {% if request.resolver_match.url_name == 'index' %}active{% endif %}">
+            <i class="bi bi-grid-1x2"></i>
+            <span>Dashboard</span>
+          </a>
+        </div>
+
+        {# INVESTIGATION #}
+        <div class="sidebar-section">
+          <div class="sidebar-section-label">Investigation</div>
+          <a href="{% url "dashboard:anomalies" %}" class="sidebar-link {% if request.resolver_match.url_name == 'anomalies' or request.resolver_match.url_name == 'anomaly_detail' %}active{% endif %}">
+            <i class="bi bi-exclamation-triangle"></i>
+            <span>Anomaly Queue</span>
+          </a>
+          <a href="{% url "reporting:report_list" %}" class="sidebar-link {% if 'report' in request.resolver_match.url_name %}active{% endif %}">
+            <i class="bi bi-file-earmark-text"></i>
+            <span>Investigation Reports</span>
+          </a>
+        </div>
+
+        {# PROCUREMENT DATA #}
+        <div class="sidebar-section">
+          <div class="sidebar-section-label">Procurement Data</div>
+          <a href="{% url "dashboard:records" %}" class="sidebar-link {% if request.resolver_match.url_name == 'records' or request.resolver_match.url_name == 'record_detail' %}active{% endif %}">
+            <i class="bi bi-table"></i>
+            <span>Records</span>
+          </a>
+          {% if user.is_administrator %}
+          <a href="{% url "ingestion:import_data" %}" class="sidebar-link {% if request.resolver_match.url_name == 'import_data' %}active{% endif %}">
+            <i class="bi bi-cloud-upload"></i>
+            <span>Import Dataset</span>
+          </a>
+          {% endif %}
+        </div>
+
+        {# ANALYTICS #}
+        <div class="sidebar-section">
+          <div class="sidebar-section-label">Analytics</div>
+          <a href="{% url "analytics_runs" %}" class="sidebar-link {% if request.resolver_match.url_name == 'analytics_runs' %}active{% endif %}">
+            <i class="bi bi-clock-history"></i>
+            <span>Analysis Runs</span>
+          </a>
+          <a href="{% url "analytics_performance" %}" class="sidebar-link {% if request.resolver_match.url_name == 'analytics_performance' %}active{% endif %}">
+            <i class="bi bi-bar-chart-line"></i>
+            <span>Model Performance</span>
+          </a>
+        </div>
+
+        {# ADMINISTRATION #}
+        {% if user.is_administrator %}
+        <div class="sidebar-section">
+          <div class="sidebar-section-label">Administration</div>
+          <a href="{% url "admin_users" %}" class="sidebar-link {% if request.resolver_match.url_name == 'admin_users' or request.resolver_match.url_name == 'admin_user_edit' %}active{% endif %}">
+            <i class="bi bi-people"></i>
+            <span>Users</span>
+          </a>
+          <a href="{% url "admin_settings" %}" class="sidebar-link {% if request.resolver_match.url_name == 'admin_settings' %}active{% endif %}">
+            <i class="bi bi-gear"></i>
+            <span>Settings</span>
+          </a>
+        </div>
+        {% endif %}
+      </nav>
+
+      <div class="sidebar-footer">
+        <a href="{% url "accounts:profile" %}" class="sidebar-user">
+          <div class="sidebar-user-icon">{{ user.username|first|upper }}</div>
+          <div class="sidebar-user-info">
+            <div class="sidebar-user-name">{{ user.get_full_name|default:user.username }}</div>
+            <div class="sidebar-user-role">{{ user.get_role_display }}</div>
+          </div>
+        </a>
+      </div>
+    </aside>
+
+    {# ─── Sidebar Overlay (mobile) ─── #}
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    {# ─── Main Content ─── #}
+    <div class="main-content">
+      <header class="topbar">
+        <button class="topbar-mobile-toggle" id="mobileToggle" aria-label="Toggle navigation">
+          <i class="bi bi-list"></i>
+        </button>
+        <div class="topbar-title">{% block topbar_title %}{% endblock %}</div>
+        {% block topbar_breadcrumb %}{% endblock %}
+        <div class="topbar-actions">
+          {% block topbar_actions %}{% endblock %}
+        </div>
+      </header>
+
+      <main class="page-content">
+        {% if messages %}
+          {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}" role="alert" style="margin-bottom: var(--space-4);">
+              <i class="bi {% if message.tags == 'success' %}bi-check-circle{% elif message.tags == 'error' %}bi-x-circle{% elif message.tags == 'warning' %}bi-exclamation-triangle{% else %}bi-info-circle{% endif %}"></i>
+              <span>{{ message }}</span>
+            </div>
+          {% endfor %}
+        {% endif %}
+
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  <script src="{% static 'js/app.js' %}"></script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

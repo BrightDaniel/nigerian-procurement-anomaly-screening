@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Settings — Procurement Intelligence{% endblock %}
+{% block topbar_title %}Settings{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-text">
+    <h1 class="page-title">Settings</h1>
+    <p class="page-subtitle">System information and configuration.</p>
+  </div>
+</div>
+
+<div class="panel" style="max-width:600px;">
+  <div class="panel-header">
+    <h2 class="panel-title">System Information</h2>
+  </div>
+  <div class="kv-grid" style="grid-template-columns:1fr;">
+    <div class="kv-item">
+      <div class="kv-label">Application</div>
+      <div class="kv-value">Procurement Intelligence — Explainable Anomaly-Screening</div>
+    </div>
+    <div class="kv-item">
+      <div class="kv-label">Version</div>
+      <div class="kv-value">Batch C</div>
+    </div>
+    <div class="kv-item">
+      <div class="kv-label">Environment</div>
+      <div class="kv-value">Development</div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="max-width:600px; margin-top:var(--space-4);">
+  <div class="panel-header">
+    <h2 class="panel-title">Dataset</h2>
+  </div>
+  <div class="kv-grid" style="grid-template-columns:1fr;">
+    <div class="kv-item">
+      <div class="kv-label">Contracts</div>
+      <div class="kv-value">{{ total_contracts }}</div>
+    </div>
+    <div class="kv-item">
+      <div class="kv-label">Feature Records</div>
+      <div class="kv-value">{{ total_features }}</div>
+    </div>
+    <div class="kv-item">
+      <div class="kv-label">Anomaly Flags</div>
+      <div class="kv-value">{{ total_flagged }} flagged of {{ total_flags }} total</div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" style="max-width:600px; margin-top:var(--space-4);">
+  <div class="panel-header">
+    <h2 class="panel-title">Detection Models</h2>
+  </div>
+  <div class="kv-grid" style="grid-template-columns:1fr;">
+    <div class="kv-item">
+      <div class="kv-label">Active Models</div>
+      <div class="kv-value">Isolation Forest, Local Outlier Factor</div>
+    </div>
+    <div class="kv-item">
+      <div class="kv-label">Features Used</div>
+      <div class="kv-value">6 (single_bidder_flag, vendor_win_frequency, vendor_win_concentration, splitting_flag, splitting_count, log_contract_value)</div>
+    </div>
+    <div class="kv-item">
+      <div class="kv-label">Default Contamination</div>
+      <div class="kv-value">0.05</div>
+    </div>
+  </div>
+</div>
+{% endblock %}

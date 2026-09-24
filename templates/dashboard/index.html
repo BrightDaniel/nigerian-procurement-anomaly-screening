@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Dashboard — Procurement Intelligence{% endblock %}
+{% block topbar_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-text">
+    <h1 class="page-title">Dashboard</h1>
+    <p class="page-subtitle">Overview of procurement data and flagged records requiring review.</p>
+  </div>
+  <div class="page-actions">
+    {% if user.is_administrator %}
+    <a href="{% url "ingestion:import_data" %}" class="btn btn-primary">
+      <i class="bi bi-cloud-upload"></i> Import Data
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+{% if not has_data %}
+  {# ─── Empty State ─── #}
+  <div class="panel">
+    <div class="empty-state">
+      <div class="empty-state-icon"><i class="bi bi-inbox"></i></div>
+      <h2 class="empty-state-title">No Data Imported</h2>
+      <p class="empty-state-text">
+        Import an OCP Data Registry CSV to begin analysis. The system will screen procurement
+        records and generate anomaly scores.
+      </p>
+      {% if user.is_administrator %}
+      <a href="{% url "ingestion:import_data" %}" class="btn btn-primary">
+        <i class="bi bi-cloud-upload"></i> Import Dataset
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+{% else %}
+  {# ─── Stat Cards ─── #}
+  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:var(--space-4); margin-bottom:var(--space-5);">
+    <div class="stat-card stat-info">
+      <div class="stat-value">{{ total_contracts|default:"0" }}</div>
+      <div class="stat-label">Total Contracts</div>
+      <div class="stat-change">Across {{ total_entities }} procuring entities</div>
+    </div>
+    <div class="stat-card stat-low">
+      <div class="stat-value">{{ total_flagged|default:"0" }}</div>
+      <div class="stat-label">Records Flagged</div>
+      <div class="stat-change">{{ total_vendors }} unique vendors</div>
+    </div>
+    <div class="stat-card stat-high">
+      <div class="stat-value">{{ high_priority_count|default:"0" }}</div>
+      <div class="stat-label">High Priority</div>
+      <div class="stat-change">Score ≥ 0.80</div>
+    </div>
+    <div class="stat-card stat-med">
+      <div class="stat-value">{{ avg_score|default:"0.00" }}</div>
+      <div class="stat-label">Average Score</div>
+      <div class="stat-change">Anomaly risk score</div>
+    </div>
+  </div>
+
+  <div class="chart-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-4); margin-bottom:var(--space-5);">
+    {# ─── Score Distribution Chart ─── #}
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title">Score Distribution</h2>
+          <p class="panel-subtitle">Number of screened records by anomaly score range.</p>
+        </div>
+      </div>
+      <div class="chart-container" style="height:240px;">
+        <canvas id="distributionChart"></canvas>
+      </div>
+    </div>
+
+    {# ─── Top MDAs Chart ─── #}
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title">Top Flagged MDAs</h2>
+          <p class="panel-subtitle">Procuring entities with the most flagged contracts.</p>
+        </div>
+      </div>
+      <div class="chart-container" style="height:240px;">
+        <canvas id="mdaChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  {# ─── Anomaly Priority Queue ─── #}
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <h2 class="panel-title">Priority Queue</h2>
+        <p class="panel-subtitle">Top flagged records by anomaly score. Click a row to investigate.</p>
+      </div>
+      <div class="panel-actions">
+        <a href="{% url "dashboard:anomalies" %}" class="btn btn-secondary btn-sm">
+          View All <i class="bi bi-arrow-right"></i>
+        </a>
+      </div>
+    </div>
+
+    {% if anomaly_queue %}
+    <div class="table-wrapper">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Priority</th>
+            <th>Contract</th>
+            <th>Entity</th>
+            <th>Vendor</th>
+            <th class="num">Amount (₦)</th>
+            <th class="num">Score</th>
+            <th>Model</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in anomaly_queue %}
+          <tr>
+            <td>
+              <span class="badge badge-{{ item.priority }}">{{ item.priority_label }}</span>
+            </td>
+            <td class="text-truncate" style="max-width:220px;">
+              <a href="{% url "dashboard:anomaly_detail" item.contract_id %}">{{ item.title }}</a>
+            </td>
+            <td class="text-truncate" style="max-width:160px;">{{ item.entity }}</td>
+            <td class="text-truncate" style="max-width:140px;">{{ item.vendor }}</td>
+            <td class="num">{{ item.amount|default:"—" }}</td>
+            <td class="num" style="font-family:var(--font-mono);">{{ item.score }}</td>
+            <td><span class="badge badge-neutral">{{ item.model_used|default:"—" }}</span></td>
+            <td>
+              <a href="{% url "dashboard:anomaly_detail" item.contract_id %}" class="btn btn-tertiary btn-sm">
+                <i class="bi bi-arrow-right"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state" style="padding:var(--space-6);">
+      <div class="empty-state-icon"><i class="bi bi-check-circle"></i></div>
+      <h2 class="empty-state-title">No Anomalies Detected</h2>
+      <p class="empty-state-text">Run an analysis to screen the imported records.</p>
+    </div>
+    {% endif %}
+  </div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  if (!document.getElementById('distributionChart')) return;
+
+  const distLabels = {{ distribution_labels|safe }};
+  const distData = {{ distribution_data|safe }};
+  const mdaLabels = {{ mda_labels|safe }};
+  const mdaData = {{ mda_data|safe }};
+
+  new Chart(document.getElementById('distributionChart'), {
+    type: 'bar',
+    data: {
+      labels: distLabels,
+      datasets: [{
+        label: 'Records',
+        data: distData,
+        backgroundColor: '#e1e5eb',
+        borderRadius: 4,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1f2933',
+          titleFont: { family: "'Inter', sans-serif", size: 12 },
+          bodyFont: { family: "'Inter', sans-serif", size: 12 },
+          padding: 10,
+          cornerRadius: 4,
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          grid: { color: '#eef1f5' },
+          ticks: { font: { family: "'Inter', sans-serif", size: 11 }, color: '#626d79' }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { font: { family: "'Inter', sans-serif", size: 11 }, color: '#626d79' }
+        }
+      }
+    }
+  });
+
+  new Chart(document.getElementById('mdaChart'), {
+    type: 'bar',
+    data: {
+      labels: mdaLabels,
+      datasets: [{
+        label: 'Flagged Contracts',
+        data: mdaData,
+        backgroundColor: '#c4421a',
+        borderRadius: 4,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1f2933',
+          titleFont: { family: "'Inter', sans-serif", size: 12 },
+          bodyFont: { family: "'Inter', sans-serif", size: 12 },
+          padding: 10,
+          cornerRadius: 4,
+        }
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          grid: { color: '#eef1f5' },
+          ticks: { font: { family: "'Inter', sans-serif", size: 11 }, color: '#626d79', stepSize: 1 }
+        },
+        y: {
+          grid: { display: false },
+          ticks: { font: { family: "'Inter', sans-serif", size: 11 }, color: '#37414a' }
+        }
+      }
+    }
+  });
+});
+</script>
+{% endblock %}

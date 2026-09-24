@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Analysis Runs — Procurement Intelligence{% endblock %}
+{% block topbar_title %}Analysis Runs{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-text">
+    <h1 class="page-title">Analysis Runs</h1>
+    <p class="page-subtitle">History of anomaly detection model executions.</p>
+  </div>
+</div>
+
+{% if has_runs %}
+<div class="panel">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Model</th>
+        <th>Records</th>
+        <th>Anomalies</th>
+        <th>Contamination</th>
+        <th>Avg Score</th>
+        <th>Duration</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for run in runs %}
+      <tr>
+        <td>{{ run.created_at|date:"Y-m-d H:i" }}</td>
+        <td><span class="badge badge-info">{{ run.model_name }}</span></td>
+        <td class="num">{{ run.n_samples }}</td>
+        <td class="num">{{ run.n_anomalies }}</td>
+        <td class="num">{{ run.contamination }}</td>
+        <td class="num">{{ run.score_mean }}</td>
+        <td class="num">{{ run.duration }}</td>
+        <td><span class="badge badge-success">{{ run.status }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-state-icon"><i class="bi bi-clock-history"></i></div>
+  <h2 class="empty-state-title">No Analysis Runs</h2>
+  <p class="empty-state-text">Run an anomaly detection analysis to see results here.</p>
+  <p class="empty-state-text" style="font-size: var(--text-small); color: var(--color-text-muted); margin-top: var(--space-2);">
+    Use <code style="font-family: var(--font-mono); background: var(--color-surface-alt); padding: 2px 6px; border-radius: var(--radius-sm);">python manage.py run_detection</code> to execute a model.
+  </p>
+</div>
+{% endif %}
+{% endblock %}
