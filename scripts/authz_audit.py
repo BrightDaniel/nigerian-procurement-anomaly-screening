@@ -312,9 +312,12 @@ else:
 print("\n" + DASH)
 print("  SECTION G: LOGOUT VIEW")
 print(DASH)
-logout_status = get_status(admin_client, '/accounts/logout/')
-print(f"  [INFO] /accounts/logout/ -> {logout_status}")
-results.append(('ADMIN', '/accounts/logout/', logout_status, '302', logout_status == 302))
+logout_get_status = get_status(admin_client, '/accounts/logout/')
+print(f"  [INFO] /accounts/logout/ GET -> {logout_get_status}")
+results.append(('ADMIN', '/accounts/logout/ GET', logout_get_status, '405', logout_get_status == 405))
+logout_post_status = admin_client.post('/accounts/logout/').status_code
+print(f"  [INFO] /accounts/logout/ POST -> {logout_post_status}")
+results.append(('ADMIN', '/accounts/logout/ POST', logout_post_status, '302', logout_post_status == 302))
 
 # -- SECTION H: Login page accessibility --
 print("\n" + DASH)

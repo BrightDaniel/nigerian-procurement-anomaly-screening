@@ -136,7 +136,7 @@ test('Profile page renders when logged in', test_profile_view)
 def test_logout():
     client = django.test.Client()
     client.login(username='admin', password='admin123')
-    resp = client.get('/accounts/logout/', follow=True)
+    resp = client.post('/accounts/logout/', follow=True)
     if resp.status_code != 200:
         raise AssertionError(f'Logout returned {resp.status_code}')
 test('Logout works', test_logout)

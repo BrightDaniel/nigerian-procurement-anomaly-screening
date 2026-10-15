@@ -1,30 +1,24 @@
 import json
 from decimal import Decimal
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Avg, Q, F, Exists, OuterRef
 from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator
 
+from apps.accounts.decorators import administrator_required
 from apps.ingestion.models import Contract, ProcuringEntity, Vendor
 from apps.features.models import Feature
 from apps.detection.models import AnomalyFlag
+from apps.core.priority import (
+    HIGH_MIN_SCORE,
+    MEDIUM_MIN_SCORE,
+    priority_for_score,
+    priority_label,
+)
 
-
-def _default_priority(score):
-    """Map anomaly score to priority label using percentile-based thresholds."""
-    if score is None:
-        return 'normal'
-    s = float(score)
-    if s >= 0.80:
-        return 'high'
-    elif s >= 0.60:
-        return 'medium'
-    return 'normal'
-
-
-def _priority_label(priority):
-    return {'high': 'High', 'medium': 'Medium', 'normal': 'Normal'}.get(priority, 'Normal')
+_default_priority = priority_for_score
+_priority_label = priority_label
 
 
 @login_required
@@ -35,7 +29,7 @@ def index_view(request):
     total_anomalies = AnomalyFlag.objects.filter(is_anomaly=True).count()
     total_flagged = AnomalyFlag.objects.count()
     high_priority_count = AnomalyFlag.objects.filter(
-        risk_score__gte=Decimal('0.80'), is_anomaly=True
+        risk_score__gte=HIGH_MIN_SCORE, is_anomaly=True
     ).count()
     avg_score = AnomalyFlag.objects.aggregate(
         avg=Coalesce(Avg('risk_score'), Decimal('0'))
@@ -259,18 +253,18 @@ def anomalies_view(request):
     if search:
         qs = qs.filter(
             Q(contract__title__icontains=search) |
-            Q(contract_id__icontains=search) |
+            Q(contract__contract_id__icontains=search) |
             Q(contract__entity__name__icontains=search) |
             Q(contract__vendor__name__icontains=search)
         )
 
     if priority_filter:
         if priority_filter == 'high':
-            qs = qs.filter(risk_score__gte=Decimal('0.80'))
+            qs = qs.filter(risk_score__gte=HIGH_MIN_SCORE)
         elif priority_filter == 'medium':
-            qs = qs.filter(risk_score__gte=Decimal('0.60'), risk_score__lt=Decimal('0.80'))
+            qs = qs.filter(risk_score__gte=MEDIUM_MIN_SCORE, risk_score__lt=HIGH_MIN_SCORE)
         elif priority_filter == 'normal':
-            qs = qs.filter(risk_score__lt=Decimal('0.60'))
+            qs = qs.filter(risk_score__lt=MEDIUM_MIN_SCORE)
 
     if entity_id:
         qs = qs.filter(contract__entity_id=entity_id)
@@ -476,30 +470,28 @@ def record_detail_view(request, contract_id):
         contract_id=contract_id
     )
 
-    # Anomaly flag
-    try:
-        flag = AnomalyFlag.objects.get(contract=contract)
-        has_anomaly = True
-    except AnomalyFlag.DoesNotExist:
-        flag = None
-        has_anomaly = False
+    # Anomaly flag — a contract can have one flag per model (IF + LOF);
+    # show the highest-risk anomalous flag.
+    flag = (
+        AnomalyFlag.objects.filter(contract=contract, is_anomaly=True)
+        .order_by('-risk_score')
+        .first()
+    )
+    has_anomaly = flag is not None
 
     # Feature values
-    try:
-        feature = Feature.objects.get(contract=contract)
-        has_features = True
-    except Feature.DoesNotExist:
-        feature = None
-        has_features = False
+    feature = Feature.objects.filter(contract=contract).first()
+    has_features = feature is not None
 
-    # Explanation
+    # Explanation matching the shown flag's model
     from apps.explainability.models import Explanation
-    try:
-        explanation = Explanation.objects.get(contract=contract)
-        has_explanation = True
-    except Explanation.DoesNotExist:
+    if flag:
+        explanation = Explanation.objects.filter(
+            contract=contract, model_used=flag.model_used
+        ).first()
+    else:
         explanation = None
-        has_explanation = False
+    has_explanation = explanation is not None
 
     # Compute priority
     priority = _default_priority(flag.risk_score) if flag else 'normal'
@@ -604,15 +596,16 @@ def analysis_runs_view(request):
 
 @login_required
 def model_performance_view(request):
-    """Model Performance — evaluation metrics and model comparison."""
-    import numpy as np
-    from apps.detection.models import AnomalyFlag, AnalysisRun
-    from apps.features.models import Feature
-    from apps.detection.trainer import FEATURE_COLUMNS, load_feature_matrix
-    from apps.detection.evaluator import precision_recall_f1
-    from apps.detection.synthetic import inject_synthetic_anomalies
-    from apps.detection.isolation_forest import IsolationForestDetector
-    from apps.detection.local_outlier import LOFDetector
+    """Model Performance — evaluation metrics and model comparison.
+
+    Renders persisted EvaluationRun results instantly; the evaluation itself
+    runs in the background when an administrator triggers it (see
+    apps.detection.evaluation). Cheap statistics below are aggregates over
+    persisted AnomalyFlag rows and stay live per request.
+    """
+    from apps.detection.models import AnomalyFlag, EvaluationRun
+    from apps.detection.evaluation import latest_run, latest_completed_run, run_status
+    from apps.core.priority import priority_scheme_text
 
     # Get stats per model from AnomalyFlag
     models_stats = []
@@ -623,11 +616,11 @@ def model_performance_view(request):
             continue
 
         anomalies = flags.filter(is_anomaly=True).count()
-        avg_score = flags.aggregate(avg=Avg('risk_score'))['avg'] or 0
+        avg_score = flags.aggregate(avg=Avg('risk_score'))['avg']
 
-        high = flags.filter(risk_score__gte=Decimal('0.80'), is_anomaly=True).count()
+        high = flags.filter(risk_score__gte=HIGH_MIN_SCORE, is_anomaly=True).count()
         medium = flags.filter(
-            risk_score__gte=Decimal('0.60'), risk_score__lt=Decimal('0.80'), is_anomaly=True
+            risk_score__gte=MEDIUM_MIN_SCORE, risk_score__lt=HIGH_MIN_SCORE, is_anomaly=True
         ).count()
         normal = anomalies - high - medium
 
@@ -662,45 +655,26 @@ def model_performance_view(request):
             dist.append(count)
         distribution[model_name] = dist
 
-    # Run evaluation on real data
-    eval_results = {}
-    X, contract_ids = load_feature_matrix()
-    if not X.empty:
-        # Synthetic anomaly evaluation — inject directly into feature space
-        X_float = X.copy().astype(float)
-        X_synth_raw, synth_labels = inject_synthetic_anomalies(X_float, anomaly_fraction=0.05)
+    # Persisted evaluation results (computed in the background)
+    interrupt_stale = False
+    current_run = latest_run()
+    status = run_status(current_run)
+    if status.get('interrupted'):
+        interrupt_stale = True
 
-        synth_feature_cols = [c for c in FEATURE_COLUMNS if c in X_synth_raw.columns]
-        X_synth = X_synth_raw[synth_feature_cols].fillna(0)
+    completed = latest_completed_run()
+    eval_results = completed.synthetic_results if completed else {}
+    has_eval = bool(eval_results)
 
-        # Train IF on synthetic data
-        if_detector = IsolationForestDetector(contamination=0.05)
-        if_detector.fit(X_synth)
-        if_preds = if_detector.predict(X_synth)
-        if_pred_binary = (if_preds == -1).astype(int)
-        if_metrics = precision_recall_f1(synth_labels, if_pred_binary)
-        eval_results['if_synth'] = if_metrics
-
-        # Train LOF on synthetic data
-        lof_detector = LOFDetector(contamination=0.05, n_neighbors=20)
-        lof_detector.fit(X_synth)
-        lof_preds = lof_detector.predict(X_synth)
-        lof_pred_binary = (lof_preds == -1).astype(int)
-        lof_metrics = precision_recall_f1(synth_labels, lof_pred_binary)
-        eval_results['lof_synth'] = lof_metrics
-
-    # Contamination sensitivity (compute live — AnalysisRun only has one contamination level)
     sensitivity_data = {}
-    try:
-        from apps.detection.trainer import run_sensitivity_analysis
-        sensitivity_results = run_sensitivity_analysis([0.01, 0.03, 0.05, 0.1])
-        for c, r in sensitivity_results.items():
-            sensitivity_data[c] = {
-                'n_anomalies': r['n_anomalies'],
-                'n_samples': r.get('n_samples', 16637),
-            }
-    except Exception:
-        pass
+    if completed and completed.sensitivity_results:
+        sensitivity_data = {
+            float(c): v
+            for c, v in sorted(
+                completed.sensitivity_results.items(),
+                key=lambda kv: float(kv[0]),
+            )
+        }
 
     context = {
         'models_stats': models_stats,
@@ -708,8 +682,47 @@ def model_performance_view(request):
         'score_ranges': json.dumps(score_ranges),
         'distribution_data': json.dumps(distribution),
         'eval_results': eval_results,
-        'has_eval': bool(eval_results),
+        'has_eval': has_eval,
         'sensitivity_data': sensitivity_data,
         'has_sensitivity': bool(sensitivity_data),
+        'eval_status': status,
+        'eval_run': current_run,
+        'eval_completed': completed,
+        'eval_interrupted': interrupt_stale,
+        'is_admin': request.user.is_administrator,
+        'priority_scheme': priority_scheme_text(),
     }
     return render(request, 'dashboard/model_performance.html', context)
+
+
+@login_required
+def evaluation_status_view(request):
+    """JSON status of the latest evaluation run — polled by the page."""
+    from django.http import JsonResponse
+    from apps.detection.evaluation import latest_run, run_status
+
+    return JsonResponse(run_status(latest_run()))
+
+
+@login_required
+@administrator_required
+def evaluation_start_view(request):
+    """Trigger a background evaluation run (POST only, administrator)."""
+    from django.contrib import messages
+    from apps.detection.evaluation import (
+        start_evaluation_run,
+        EvaluationAlreadyRunning,
+    )
+
+    if request.method != 'POST':
+        return redirect('dashboard:model_performance')
+
+    try:
+        run = start_evaluation_run(request.user)
+        messages.success(
+            request,
+            f'Evaluation run #{run.run_id} queued — results will appear automatically.',
+        )
+    except EvaluationAlreadyRunning as exc:
+        messages.info(request, str(exc))
+    return redirect('dashboard:model_performance')

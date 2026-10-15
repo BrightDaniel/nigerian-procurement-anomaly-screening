@@ -94,6 +94,11 @@
             <div class="sidebar-user-role">{{ user.get_role_display }}</div>
           </div>
         </a>
+        <button type="button" class="sidebar-logout" data-logout-open
+                aria-haspopup="dialog" title="Sign out">
+          <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+          <span class="sidebar-logout-label">Sign out</span>
+        </button>
       </div>
     </aside>
 
@@ -110,6 +115,10 @@
         {% block topbar_breadcrumb %}{% endblock %}
         <div class="topbar-actions">
           {% block topbar_actions %}{% endblock %}
+          <button type="button" class="topbar-logout-btn" data-logout-open
+                  aria-haspopup="dialog" aria-label="Sign out" title="Sign out">
+            <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+          </button>
         </div>
       </header>
 
@@ -128,7 +137,42 @@
     </div>
   </div>
 
+  {# ─── Logout confirmation dialog (accessible, POST + CSRF) ─── #}
+  <dialog class="confirm-dialog" id="logoutDialog"
+          aria-labelledby="logoutDialogTitle" aria-describedby="logoutDialogMessage">
+    <form method="post" action="{% url 'accounts:logout' %}" id="logoutForm">
+      {% csrf_token %}
+      <h2 class="confirm-dialog-title" id="logoutDialogTitle">Sign out?</h2>
+      <p class="confirm-dialog-message" id="logoutDialogMessage">Are you sure you want to end your session?</p>
+      <div class="confirm-dialog-actions">
+        <button type="button" class="btn btn-secondary" id="logoutCancelBtn" autofocus>Cancel</button>
+        <button type="submit" class="btn btn-primary">Sign out</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="{% static 'js/app.js' %}"></script>
+  <script>
+    (function () {
+      var dialog = document.getElementById('logoutDialog');
+      if (!dialog) return;
+      var cancelBtn = document.getElementById('logoutCancelBtn');
+      document.querySelectorAll('[data-logout-open]').forEach(function (trigger) {
+        trigger.addEventListener('click', function () {
+          if (typeof dialog.showModal === 'function') {
+            dialog.showModal();
+          } else {
+            dialog.setAttribute('open', '');
+          }
+          cancelBtn.focus();
+        });
+      });
+      cancelBtn.addEventListener('click', function () { dialog.close('cancel'); });
+      dialog.addEventListener('click', function (event) {
+        if (event.target === dialog) { dialog.close('cancel'); }
+      });
+    })();
+  </script>
   {% block extra_js %}{% endblock %}
 </body>
 </html>

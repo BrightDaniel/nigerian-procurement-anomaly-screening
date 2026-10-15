@@ -10,3 +10,213 @@ body {
 .navbar-brand {
     font-weight: 600;
 }
+
+/* ─── Standalone authentication layout (login page) ───
+   Independent of the authenticated app shell: no sidebar,
+   no topbar, no account controls. Uses design-system tokens. */
+.auth-layout {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-5) var(--space-4);
+    background: var(--color-bg);
+}
+
+.auth-panel {
+    width: 100%;
+    max-width: 420px;
+}
+
+.auth-brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-5);
+    color: var(--color-primary-700);
+    font-size: var(--text-h2);
+    font-weight: var(--weight-semibold);
+    text-align: center;
+}
+
+.auth-brand i {
+    font-size: 1.75rem;
+    color: var(--color-primary-600);
+}
+
+@media (max-width: 480px) {
+    .auth-layout { padding: var(--space-4) var(--space-3); align-items: flex-start; padding-top: var(--space-7); }
+    .auth-brand { font-size: var(--text-body); }
+}
+
+/* ─── Sign-in form controls ───
+   Password visibility toggle + submit loading state. The button keeps a
+   stable height so swapping icon/label never shifts the layout. */
+.password-field {
+    position: relative;
+}
+
+.password-field .form-control {
+    padding-right: 42px;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    padding: var(--space-1);
+    line-height: 1;
+    font-size: 1rem;
+    color: var(--color-text-muted);
+    cursor: pointer;
+}
+
+.password-toggle:hover,
+.password-toggle:focus-visible {
+    color: var(--color-text);
+}
+
+.auth-submit {
+    width: 100%;
+    justify-content: center;
+    min-height: 40px;
+}
+
+.auth-submit-spinner {
+    animation: auth-spin 0.8s linear infinite;
+}
+
+@keyframes auth-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ─── Logout (sidebar action, topbar action, confirmation dialog) ───
+   The dialog is a native <dialog> element: role=dialog, focus trap and
+   Escape-to-close come from the browser, so no extra JS framework is
+   needed. Triggers open it; Cancel or Escape close it without logging out. */
+.sidebar-logout {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    width: 100%;
+    margin-top: var(--space-1);
+    padding: var(--space-2) var(--space-3);
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--color-neutral-300);
+    font-family: inherit;
+    font-size: var(--text-body);
+    text-align: left;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.sidebar-logout:hover,
+.sidebar-logout:focus-visible {
+    background: var(--color-neutral-800);
+    color: var(--color-neutral-200);
+}
+
+.sidebar-logout i {
+    flex-shrink: 0;
+}
+
+.sidebar-logout-label {
+    overflow: hidden;
+    white-space: nowrap;
+    transition: opacity var(--transition-fast);
+}
+
+.sidebar.collapsed .sidebar-logout-label {
+    opacity: 0;
+    width: 0;
+}
+
+.topbar-logout-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 1.125rem;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.topbar-logout-btn:hover,
+.topbar-logout-btn:focus-visible {
+    background: var(--color-neutral-50);
+    color: var(--color-text);
+}
+
+.confirm-dialog {
+    /* The global reset (* { margin: 0 }) overrides the UA stylesheet's
+       margin:auto on <dialog>, so centering is set explicitly here. */
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 0;
+    width: min(24rem, calc(100% - 2rem));
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    background: var(--color-surface);
+    color: var(--color-text);
+    box-shadow: var(--shadow-lg);
+}
+
+.confirm-dialog[open] {
+    animation: confirm-dialog-in 0.15s ease-out;
+}
+
+@keyframes confirm-dialog-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .confirm-dialog[open] { animation: none; }
+}
+
+.confirm-dialog::backdrop {
+    background: rgba(16, 42, 67, 0.45);
+}
+
+.confirm-dialog form {
+    padding: var(--space-5);
+}
+
+.confirm-dialog-title {
+    font-size: var(--text-h3);
+    font-weight: var(--weight-semibold);
+    color: var(--color-text);
+    margin-bottom: var(--space-2);
+}
+
+.confirm-dialog-message {
+    color: var(--color-text-secondary);
+    margin-bottom: var(--space-5);
+}
+
+.confirm-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+}
+
+@media (max-width: 480px) {
+    .confirm-dialog-actions .btn {
+        flex: 1;
+        justify-content: center;
+    }
+}

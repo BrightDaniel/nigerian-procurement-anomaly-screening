@@ -7,8 +7,53 @@
   <div class="page-header-text">
     <h1 class="page-title">Model Performance</h1>
     <p class="page-subtitle">Evaluation metrics and diagnostics for the anomaly detection models.</p>
+    <p class="page-subtitle" style="font-size: var(--text-small); color: var(--color-text-muted);">{{ priority_scheme }}</p>
+  </div>
+  <div class="page-actions">
+    {% if is_admin %}
+      {% if eval_status.status == 'queued' or eval_status.status == 'running' %}
+      <span class="badge badge-medium" id="eval-status-badge" title="{{ eval_status.stage }}">Evaluation running…</span>
+      {% else %}
+      <form method="post" action="{% url 'dashboard:evaluation_start' %}" id="eval-start-form">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary" id="eval-start-btn">
+          <i class="bi bi-play-circle"></i> Run Evaluation
+        </button>
+      </form>
+      {% endif %}
+    {% endif %}
   </div>
 </div>
+
+{% if eval_status.status == 'failed' %}
+<div class="alert alert-error" style="margin-bottom: var(--space-4);">
+  <strong>Evaluation run failed.</strong> {{ eval_status.error }}
+</div>
+{% elif eval_interrupted %}
+<div class="alert alert-warning" style="margin-bottom: var(--space-4);">
+  <strong>Evaluation was interrupted</strong> — the process running it stopped before it finished.
+  No results were lost; run it again to recompute. Previously completed results (if any) are shown below.
+</div>
+{% endif %}
+
+{% if eval_status.status == 'queued' or eval_status.status == 'running' %}
+<div class="panel" id="eval-progress-panel" style="margin-bottom: var(--space-5);">
+  <div class="panel-header">
+    <h3 class="panel-title">Evaluation in Progress</h3>
+  </div>
+  <p class="page-subtitle" id="eval-stage" style="margin-bottom: var(--space-3);">{{ eval_status.stage }}</p>
+  <div class="progress-indeterminate" aria-hidden="true"><span></span></div>
+  <p style="font-size: var(--text-small); color: var(--color-text-muted); margin-top: var(--space-2);">
+    Computed once in the background — this page refreshes automatically when results are ready.
+  </p>
+</div>
+{% elif eval_completed %}
+<p style="font-size: var(--text-small); color: var(--color-text-muted); margin-bottom: var(--space-4);">
+  Evaluation results from {{ eval_completed.finished_at|date:"Y-m-d H:i" }}
+  {% if eval_completed.duration_seconds %} · completed in {{ eval_completed.duration_seconds|floatformat:1 }}s{% endif %}.
+  {% if is_admin %}Use <strong>Run Evaluation</strong> to recompute.{% endif %}
+</p>
+{% endif %}
 
 {% if has_models %}
 <div class="chart-grid">
@@ -65,6 +110,7 @@
   <p style="font-size: var(--text-small); color: var(--color-text-muted); margin-bottom: var(--space-3);">
     Evaluation against synthetically injected anomalies (5% mixed strategy). This creates a known ground-truth set for measuring detection performance.
   </p>
+  <div class="table-wrapper">
   <table class="table">
     <thead>
       <tr>
@@ -102,6 +148,7 @@
       {% endif %}
     </tbody>
   </table>
+  </div>
 </div>
 {% endif %}
 
@@ -113,6 +160,7 @@
   <p style="font-size: var(--text-small); color: var(--color-text-muted); margin-bottom: var(--space-3);">
     How the number of flagged anomalies changes with the contamination parameter (Isolation Forest).
   </p>
+  <div class="table-wrapper">
   <table class="table">
     <thead>
       <tr>
@@ -131,6 +179,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
 {% endif %}
 
@@ -188,6 +237,32 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 </script>
+
+{% if eval_status.status == 'queued' or eval_status.status == 'running' %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var statusUrl = "{% url 'dashboard:evaluation_status' %}";
+  var stageEl = document.getElementById('eval-stage');
+  var badgeEl = document.getElementById('eval-status-badge');
+
+  function poll() {
+    fetch(statusUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function(resp) { return resp.json(); })
+      .then(function(data) {
+        if (data.status === 'succeeded' || data.status === 'failed' || data.status === 'interrupted') {
+          window.location.reload();
+          return;
+        }
+        if (stageEl && data.stage) { stageEl.textContent = data.stage; }
+        if (badgeEl && data.stage) { badgeEl.title = data.stage; }
+        setTimeout(poll, 2000);
+      })
+      .catch(function() { setTimeout(poll, 5000); });
+  }
+  setTimeout(poll, 2000);
+});
+</script>
+{% endif %}
 
 {% else %}
 <div class="empty-state">

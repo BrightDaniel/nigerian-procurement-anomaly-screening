@@ -1,39 +1,42 @@
-from decimal import Decimal
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.db.models import Q
+from django.db.models import Q, Max, Exists, OuterRef, Prefetch
 from django.core.paginator import Paginator
 
 from apps.ingestion.models import Contract, ProcuringEntity
 from apps.detection.models import AnomalyFlag
 from apps.features.models import Feature
 from apps.explainability.models import Explanation
+from apps.core.priority import (
+    HIGH_MIN_SCORE,
+    MEDIUM_MIN_SCORE,
+    priority_for_score,
+    priority_label,
+)
 from .models import InvestigationReport
 
-
-def _default_priority(score):
-    if score is None:
-        return 'normal'
-    s = float(score)
-    if s >= 0.80:
-        return 'high'
-    elif s >= 0.60:
-        return 'medium'
-    return 'normal'
-
-
-def _priority_label(priority):
-    return {'high': 'High', 'medium': 'Medium', 'normal': 'Normal'}.get(priority, 'Normal')
+_default_priority = priority_for_score
+_priority_label = priority_label
 
 
 @login_required
 def report_list_view(request):
     """Investigation Reports — flagged contracts with investigation status."""
     qs = (
-        Contract.objects.filter(anomaly_flags__is_anomaly=True)
-        .select_related('entity', 'vendor', 'anomaly_flags')
-        .order_by('-anomaly_flags__risk_score')
+        Contract.objects.filter(
+            Exists(
+                AnomalyFlag.objects.filter(contract=OuterRef('pk'), is_anomaly=True)
+            )
+        )
+        .select_related('entity', 'vendor')
+        .annotate(
+            best_score=Max(
+                'anomaly_flags__risk_score',
+                filter=Q(anomaly_flags__is_anomaly=True),
+            )
+        )
+        .order_by('-best_score', '-contract_id')
     )
 
     # Filters
@@ -52,13 +55,20 @@ def report_list_view(request):
     if entity_id:
         qs = qs.filter(entity_id=entity_id)
 
-    if priority_filter:
-        if priority_filter == 'high':
-            qs = qs.filter(anomaly_flags__risk_score__gte=Decimal('0.80'))
-        elif priority_filter == 'medium':
-            qs = qs.filter(anomaly_flags__risk_score__gte=Decimal('0.60'), anomaly_flags__risk_score__lt=Decimal('0.80'))
-        elif priority_filter == 'normal':
-            qs = qs.filter(anomaly_flags__risk_score__lt=Decimal('0.60'))
+    if priority_filter == 'high':
+        qs = qs.filter(best_score__gte=HIGH_MIN_SCORE)
+    elif priority_filter == 'medium':
+        qs = qs.filter(best_score__gte=MEDIUM_MIN_SCORE, best_score__lt=HIGH_MIN_SCORE)
+    elif priority_filter == 'normal':
+        qs = qs.filter(best_score__lt=MEDIUM_MIN_SCORE)
+
+    qs = qs.prefetch_related(
+        Prefetch(
+            'anomaly_flags',
+            queryset=AnomalyFlag.objects.filter(is_anomaly=True).order_by('-risk_score'),
+            to_attr='anomaly_list',
+        )
+    )
 
     paginator = Paginator(qs, 25)
     page_number = request.GET.get('page', 1)
@@ -66,7 +76,7 @@ def report_list_view(request):
 
     report_list = []
     for contract in page_obj:
-        flag = contract.anomaly_flags.order_by('-risk_score').first()
+        flag = contract.anomaly_list[0] if contract.anomaly_list else None
         if not flag:
             continue
         priority = _default_priority(flag.risk_score)
@@ -106,23 +116,23 @@ def report_detail_view(request, contract_id):
         contract_id=contract_id
     )
 
-    try:
-        flag = AnomalyFlag.objects.get(contract=contract)
-        has_anomaly = True
-    except AnomalyFlag.DoesNotExist:
-        flag = None
-        has_anomaly = False
+    # A contract can have one flag per model (IF + LOF) — show the
+    # highest-risk anomalous flag rather than assuming a single row.
+    flag = (
+        AnomalyFlag.objects.filter(contract=contract, is_anomaly=True)
+        .order_by('-risk_score')
+        .first()
+    )
+    has_anomaly = flag is not None
 
-    try:
-        feature = Feature.objects.get(contract=contract)
-        has_features = True
-    except Feature.DoesNotExist:
-        feature = None
-        has_features = False
+    feature = Feature.objects.filter(contract=contract).first()
+    has_features = feature is not None
 
-    try:
-        explanation = Explanation.objects.get(contract=contract)
-    except Explanation.DoesNotExist:
+    if flag:
+        explanation = Explanation.objects.filter(
+            contract=contract, model_used=flag.model_used
+        ).first()
+    else:
         explanation = None
 
     # Get or list investigation reports

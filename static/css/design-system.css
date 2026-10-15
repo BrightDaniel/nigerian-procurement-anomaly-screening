@@ -310,6 +310,7 @@ a:hover { color: var(--color-primary-700); }
 .main-content {
   margin-left: var(--sidebar-width);
   flex: 1;
+  min-width: 0;
   min-height: 100vh;
   background: var(--color-bg);
   transition: margin-left var(--transition-base);
@@ -335,6 +336,10 @@ a:hover { color: var(--color-primary-700); }
   font-size: var(--text-h4);
   font-weight: var(--weight-semibold);
   color: var(--color-text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .topbar-sep {
   color: var(--color-neutral-300);
@@ -935,6 +940,41 @@ a:hover { color: var(--color-primary-700); }
 }
 .chart-container canvas {
   width: 100% !important;
+}
+
+/* ─── Layout Grids ─── */
+.chart-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-3);
+}
+
+/* ─── Background Job Progress (Model Performance) ─── */
+.progress-indeterminate {
+  height: 6px;
+  background: var(--color-neutral-100);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  position: relative;
+}
+.progress-indeterminate span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 40%;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-500);
+  animation: progress-slide 1.2s ease-in-out infinite;
+}
+@keyframes progress-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
 }
 
 /* ═══════════════════════════════════════════════════════════

@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from apps.core.models import TimeStampedModel
 from apps.ingestion.models import Contract
@@ -27,6 +28,57 @@ class AnalysisRun(TimeStampedModel):
 
     def __str__(self):
         return f'{self.model_name} — {self.created_at:%Y-%m-%d %H:%M}'
+
+
+class EvaluationRun(TimeStampedModel):
+    """A background execution of the Model Performance evaluation pipeline.
+
+    Persists synthetic-evaluation and sensitivity results so the Model
+    Performance page can render instantly instead of re-training models on
+    every request. Progress fields (stage, heartbeat) support live status
+    polling and stale-run detection.
+    """
+
+    STATUS_QUEUED = 'queued'
+    STATUS_RUNNING = 'running'
+    STATUS_SUCCEEDED = 'succeeded'
+    STATUS_FAILED = 'failed'
+    STATUS_INTERRUPTED = 'interrupted'
+    STATUS_CHOICES = [
+        (STATUS_QUEUED, 'Queued'),
+        (STATUS_RUNNING, 'Running'),
+        (STATUS_SUCCEEDED, 'Succeeded'),
+        (STATUS_FAILED, 'Failed'),
+        (STATUS_INTERRUPTED, 'Interrupted'),
+    ]
+
+    run_id = models.AutoField(primary_key=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_QUEUED)
+    stage = models.CharField(max_length=120, blank=True, default='')
+    synthetic_results = models.JSONField(null=True, blank=True)
+    sensitivity_results = models.JSONField(null=True, blank=True)
+    config = models.JSONField(null=True, blank=True)
+    error = models.TextField(blank=True, default='')
+    triggered_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='evaluation_runs',
+    )
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    heartbeat_at = models.DateTimeField(null=True, blank=True)
+    duration_seconds = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'evaluation_runs'
+        verbose_name = 'Evaluation Run'
+        verbose_name_plural = 'Evaluation Runs'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Evaluation {self.run_id} — {self.status} ({self.created_at:%Y-%m-%d %H:%M})'
 
 
 class AnomalyFlag(TimeStampedModel):

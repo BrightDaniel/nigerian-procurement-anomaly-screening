@@ -20,6 +20,7 @@ import requests
 import pandas as pd
 from django.conf import settings
 from django.db import transaction
+from django.db.models.fields.json import KeyTextTransform
 
 from apps.ingestion.models import RawRecord, ProcuringEntity, Vendor, Contract
 from apps.ingestion.services.ocds_mapping import map_ocds_row
@@ -73,7 +74,7 @@ def _discover_csv_url():
     return None
 
 
-def download_csv_bundle(url=None, dest_dir=None):
+def download_csv_bundle(url=None, dest_dir=None, progress=None):
     """Download the OCP full.csv.tar.gz bundle and extract to data/raw/.
     
     If the configured URL fails with a 404, attempts to discover
@@ -82,6 +83,8 @@ def download_csv_bundle(url=None, dest_dir=None):
     Args:
         url: Override URL (defaults to NOCOPO_CSV_URL from settings)
         dest_dir: Override destination directory
+        progress: Optional callable(stage_text) invoked during the
+            download so a background job can keep its heartbeat fresh
     
     Returns:
         Path to extracted CSV file
@@ -116,9 +119,22 @@ def download_csv_bundle(url=None, dest_dir=None):
         else:
             raise
 
+    downloaded = 0
+    total_size = int(response.headers.get('Content-Length', 0) or 0)
     with open(tar_path, 'wb') as f:
         for chunk in response.iter_content(chunk_size=8192):
             f.write(chunk)
+            downloaded += len(chunk)
+            if progress and total_size:
+                progress(
+                    f'Downloading OCP bundle — {downloaded // (1024 * 1024)} MB '
+                    f'of {total_size // (1024 * 1024)} MB'
+                )
+            elif progress and downloaded % (1024 * 1024 * 5) < 8192:
+                progress(f'Downloading OCP bundle — {downloaded // (1024 * 1024)} MB')
+
+    if progress:
+        progress('Extracting OCP bundle...')
 
     logger.info(f'Extracting {tar_path}...')
     with tarfile.open(tar_path, 'r:gz') as tar:
@@ -168,7 +184,7 @@ def _save_snapshot(csv_path, dest_dir):
     logger.info(f'Snapshot saved: {snapshot_path}')
 
 
-def import_csv_to_raw(csv_path, batch_size=1000):
+def import_csv_to_raw(csv_path, batch_size=1000, progress=None):
     """Import OCP CSV bundle into RawRecord staging table.
     
     The OCP bundle contains multiple CSV files that need joining:
@@ -182,11 +198,18 @@ def import_csv_to_raw(csv_path, batch_size=1000):
     Args:
         csv_path: Path to the extracted bundle directory or main CSV
         batch_size: Number of records to insert per batch
+        progress: Optional callable(stage_text) invoked periodically so a
+            background job can persist progress heartbeats
     
     Returns:
-        dict with import statistics
+        dict with staging statistics:
+            rows_seen    — rows present in the joined CSV
+            staged       — new rows written to the staging table
+            duplicates   — rows skipped because the award id is already staged
+            missing_id   — rows skipped because they have no award id
+            failed       — rows lost to staging insert failures
     """
-    stats = {'total': 0, 'imported': 0, 'skipped': 0, 'errors': 0}
+    stats = {'rows_seen': 0, 'staged': 0, 'duplicates': 0, 'missing_id': 0, 'failed': 0}
     
     # Resolve the bundle directory
     csv_path = Path(csv_path)
@@ -264,24 +287,32 @@ def import_csv_to_raw(csv_path, batch_size=1000):
         joined['supplier_name'] = ''
     
     logger.info(f'Joined {len(joined)} award records')
-    
+
+    # Existing award ids are loaded once: the stored JSON uses flat keys
+    # ('awards/id'), so the old per-row nested-path lookup matched nothing
+    # and re-imports duplicated the whole dataset.
+    existing_award_ids = {
+        aid for aid in RawRecord.objects.values_list(
+            KeyTextTransform('awards/id', 'ocds_release'), flat=True
+        ) if aid
+    }
+
     # Convert to flat dicts matching expected OCDS-like structure
     records = []
     for _, row in joined.iterrows():
-        stats['total'] += 1
+        stats['rows_seen'] += 1
         
         # Use award id as unique identifier
         award_id = str(row.get('id', '')).strip()
         if not award_id:
-            stats['skipped'] += 1
+            stats['missing_id'] += 1
             continue
         
-        # Check for duplicate
-        if RawRecord.objects.filter(
-            ocds_release__awards__id=award_id
-        ).exists():
-            stats['skipped'] += 1
+        # Check for duplicate (staged rows and earlier rows in this file)
+        if award_id in existing_award_ids:
+            stats['duplicates'] += 1
             continue
+        existing_award_ids.add(award_id)
         
         # Build flat dict for ocds_release
         flat = {
@@ -306,14 +337,25 @@ def import_csv_to_raw(csv_path, batch_size=1000):
         if len(records) >= batch_size:
             _flush_batch(records, stats)
             records = []
+            if progress:
+                progress(
+                    f'Staged {stats["staged"]:,} of {stats["rows_seen"]:,} rows '
+                    f'({stats["duplicates"]:,} duplicates skipped)'
+                )
     
     if records:
         _flush_batch(records, stats)
+
+    if progress:
+        progress(
+            f'Staging complete: {stats["staged"]:,} new rows, '
+            f'{stats["duplicates"]:,} duplicates skipped'
+        )
     
     logger.info(
-        f'Import complete: {stats["imported"]} imported, '
-        f'{stats["skipped"]} skipped, {stats["errors"]} errors '
-        f'out of {stats["total"]} total rows'
+        f'Staging complete: {stats["staged"]} staged, '
+        f'{stats["duplicates"]} duplicates, {stats["missing_id"]} missing ids, '
+        f'{stats["failed"]} failed out of {stats["rows_seen"]} rows seen'
     )
     return stats
 
@@ -323,58 +365,93 @@ def _flush_batch(batch, stats):
     try:
         with transaction.atomic():
             RawRecord.objects.bulk_create(batch, ignore_conflicts=True)
-            stats['imported'] += len(batch)
+            stats['staged'] += len(batch)
     except Exception as e:
         logger.error(f'Batch insert failed: {e}')
-        stats['errors'] += len(batch)
+        stats['failed'] += len(batch)
 
 
-def validate_and_import_records(batch_size=500):
+def validate_and_import_records(batch_size=500, progress=None, raw_ids=None):
     """Validate RawRecords and import valid ones into the main tables.
     
-    Maps OCDS fields → internal models, creates/gets ProcuringEntity and Vendor,
-    then creates Contract records.
+    Processes every staged row that has not been imported yet (including
+    rows validated in an earlier run whose contract insert failed, so a
+    failed batch can be recovered by simply running the import again).
+    
+    Args:
+        batch_size: Records per import batch
+        progress: Optional callable(stage_text) for background heartbeats
+        raw_ids: Optional iterable of raw ids to restrict processing to
+            (used by tests to avoid touching the full staging table)
     
     Returns:
-        dict with validation/import statistics
+        dict with validation/import statistics:
+            rows_checked      — staged rows considered by this run
+            valid             — rows that passed validation
+            invalid           — rows that failed validation
+            contracts_created — contracts actually persisted this run
+            contracts_existing— valid rows whose contract already existed
+            import_failed     — unexpected insert failures (should be 0)
+            validation_errors — [{raw_id, errors}] for rejected rows
+            import_errors     — [{raw_id, error}] for failed inserts
     """
     stats = {
-        'total': 0, 'valid': 0, 'invalid': 0,
-        'contracts_created': 0, 'errors': []
+        'rows_checked': 0, 'valid': 0, 'invalid': 0,
+        'contracts_created': 0, 'contracts_existing': 0,
+        'import_failed': 0, 'validation_errors': [], 'import_errors': [],
     }
 
-    unvalidated = RawRecord.objects.filter(is_validated=False, is_imported=False)
-    logger.info(f'Validating {unvalidated.count()} raw records...')
+    pending = RawRecord.objects.filter(is_imported=False).order_by('raw_id')
+    if raw_ids is not None:
+        pending = pending.filter(raw_id__in=list(raw_ids))
+    logger.info(f'Validating {pending.count()} raw records...')
+
+    # Existing nocopo ids are preloaded so duplicate contracts are counted
+    # as "already present" instead of crashing the batch on the unique key.
+    existing_nocopo = {
+        n for n in Contract.objects.values_list('nocopo_id', flat=True) if n
+    }
 
     batch = []
-    for raw in unvalidated.iterator():
-        stats['total'] += 1
+    for raw in pending.iterator():
+        stats['rows_checked'] += 1
         mapped = map_ocds_row(raw.ocds_release)
 
         errors = _validate_mapped_record(mapped)
         if errors:
-            raw.is_validated = True
-            raw.validation_errors = errors
-            raw.save(update_fields=['is_validated', 'validation_errors'])
+            if raw.validation_errors != errors:
+                raw.is_validated = True
+                raw.validation_errors = errors
+                raw.save(update_fields=['is_validated', 'validation_errors'])
             stats['invalid'] += 1
-            stats['errors'].append({'raw_id': raw.raw_id, 'errors': errors})
+            stats['validation_errors'].append({'raw_id': raw.raw_id, 'errors': errors})
             continue
 
-        raw.is_validated = True
-        raw.save(update_fields=['is_validated'])
+        if not raw.is_validated:
+            raw.is_validated = True
+            raw.save(update_fields=['is_validated'])
         stats['valid'] += 1
         batch.append((raw, mapped))
 
         if len(batch) >= batch_size:
-            _import_validated_batch(batch, stats)
+            _import_validated_batch(batch, stats, existing_nocopo)
             batch = []
+            if progress:
+                progress(
+                    f'Checked {stats["rows_checked"]:,} rows — '
+                    f'{stats["contracts_created"]:,} contracts created, '
+                    f'{stats["contracts_existing"]:,} already present'
+                )
 
     if batch:
-        _import_validated_batch(batch, stats)
+        _import_validated_batch(batch, stats, existing_nocopo)
 
     logger.info(
         f'Validation complete: {stats["valid"]} valid, '
-        f'{stats["invalid"]} invalid out of {stats["total"]}'
+        f'{stats["invalid"]} invalid out of {stats["rows_checked"]}; '
+        f'{stats["contracts_created"]} contracts created, '
+        f'{stats["contracts_existing"]} already present, '
+        f'{stats["import_failed"]} failed'
     )
     return stats
 
@@ -391,11 +468,24 @@ def _validate_mapped_record(mapped):
     return errors
 
 
-def _import_validated_batch(batch, stats):
-    """Import validated records into ProcuringEntity, Vendor, and Contract tables."""
-    with transaction.atomic():
-        for raw, mapped in batch:
-            try:
+def _import_validated_batch(batch, stats, existing_nocopo):
+    """Import validated records into ProcuringEntity, Vendor, and Contract tables.
+
+    Each record commits inside its own savepoint. A failure on one record
+    (for example a duplicate nocopo_id) rolls back only that record —
+    previously the whole batch shared one transaction, so a single
+    IntegrityError poisoned it and PostgreSQL silently discarded every
+    insert the counters had already recorded.
+    """
+    for raw, mapped in batch:
+        if mapped['nocopo_id'] in existing_nocopo:
+            stats['contracts_existing'] += 1
+            raw.is_imported = True
+            raw.save(update_fields=['is_imported'])
+            continue
+
+        try:
+            with transaction.atomic():
                 # Create or get procuring entity
                 entity = None
                 entity_name = mapped.get('entity_name', '').strip()
@@ -428,10 +518,13 @@ def _import_validated_batch(batch, stats):
                     description=mapped.get('description'),
                     nocopo_id=mapped['nocopo_id'],
                 )
-                stats['contracts_created'] += 1
-                raw.is_imported = True
-                raw.save(update_fields=['is_imported'])
 
-            except Exception as e:
-                logger.error(f'Failed to import raw {raw.raw_id}: {e}')
-                stats['errors'].append({'raw_id': raw.raw_id, 'error': str(e)})
+            existing_nocopo.add(mapped['nocopo_id'])
+            stats['contracts_created'] += 1
+            raw.is_imported = True
+            raw.save(update_fields=['is_imported'])
+
+        except Exception as e:
+            logger.error(f'Failed to import raw {raw.raw_id}: {e}')
+            stats['import_failed'] += 1
+            stats['import_errors'].append({'raw_id': raw.raw_id, 'error': str(e)})

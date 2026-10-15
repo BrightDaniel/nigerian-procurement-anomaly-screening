@@ -2,6 +2,8 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout, get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_http_methods
 from .forms import LoginForm, AdminUserCreateForm
 from .decorators import administrator_required
 
@@ -10,7 +12,10 @@ def login_view(request):
     if request.user.is_authenticated:
         return redirect('dashboard:index')
     if request.method == 'POST':
-        form = LoginForm(request.POST)
+        # AuthenticationForm's first positional parameter is `request`;
+        # POST data must be passed via the `data` kwarg or the form is
+        # never bound and validation always fails silently.
+        form = LoginForm(request, data=request.POST)
         if form.is_valid():
             user = form.get_user()
             login(request, user)
@@ -21,9 +26,12 @@ def login_view(request):
     return render(request, 'accounts/login.html', {'form': form})
 
 
+@require_http_methods(['POST'])
+@never_cache
 def logout_view(request):
+    """End the user's session. POST-only (CSRF-protected by middleware)."""
     logout(request)
-    messages.info(request, 'You have been logged out.')
+    messages.success(request, 'You have been signed out successfully.')
     return redirect('accounts:login')
 
 

@@ -11,4 +11,6 @@ urlpatterns = [
     path('records/<int:contract_id>/', views.record_detail_view, name='record_detail'),
     path('analysis-runs/', views.analysis_runs_view, name='analysis_runs'),
     path('model-performance/', views.model_performance_view, name='model_performance'),
+    path('model-performance/run/', views.evaluation_start_view, name='evaluation_start'),
+    path('model-performance/status/', views.evaluation_status_view, name='evaluation_status'),
 ]

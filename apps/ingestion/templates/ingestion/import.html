@@ -29,7 +29,10 @@
              style="padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-md); width: 100%; font-family: var(--font-mono); font-size: var(--text-small);">
     </div>
 
-    <div style="display: flex; gap: var(--space-3); align-items: center; margin-bottom: var(--space-4);">
+    <div style="display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; margin-bottom: var(--space-4);">
+      {% if job_active %}
+      <span class="badge badge-medium">An import is running — submission disabled</span>
+      {% else %}
       <button type="submit" class="btn btn-primary">
         <i class="bi bi-upload"></i> Upload &amp; Import
       </button>
@@ -37,69 +40,134 @@
       <button type="submit" name="use_ocp" value="1" class="btn btn-outline">
         <i class="bi bi-cloud-download"></i> Download from OCP
       </button>
+      {% endif %}
     </div>
   </form>
 
-  {% if error %}
+  {% if job_status.status == 'failed' %}
   <div class="alert alert-error" style="margin-top: var(--space-4);">
     <i class="bi bi-exclamation-triangle"></i>
-    <strong>Import failed:</strong> {{ error }}
+    <strong>Import job #{{ job.job_id|default:"?" }} failed:</strong> {{ job_status.error }}
+  </div>
+  {% elif job_status.interrupted %}
+  <div class="alert alert-warning" style="margin-top: var(--space-4);">
+    <i class="bi bi-exclamation-triangle"></i>
+    <strong>Import was interrupted</strong> — the process running it stopped before it finished.
+    No results from this run were kept (staged rows it added are still in staging and will be
+    picked up by the next run). Start the import again to continue.
   </div>
   {% endif %}
 
-  {% if stats %}
+  {% if job_active %}
+  <div class="panel" id="job-progress-panel" style="margin-top: var(--space-4);">
+    <div class="panel-header">
+      <h3 class="panel-title">Import in Progress <span style="font-size: var(--text-small); color: var(--color-text-muted); font-weight: var(--weight-normal);">#{{ job.job_id }}</span></h3>
+      <span class="badge badge-medium" id="job-status-badge" title="{{ job_status.stage }}">{{ job_status.status|title }}</span>
+    </div>
+    <p class="page-subtitle" id="job-stage" style="margin-bottom: var(--space-3);">{{ job_status.stage }}</p>
+    <div class="progress-indeterminate" aria-hidden="true"><span></span></div>
+    <p style="font-size: var(--text-small); color: var(--color-text-muted); margin-top: var(--space-2);">
+      Running in the background — this page refreshes automatically when the job finishes.
+      Progress is stored on the server, so it survives a page refresh.
+    </p>
+  </div>
+  {% endif %}
+
+  {% if job and job.staging %}
   <div style="margin-top: var(--space-5);">
-    <h3 style="font-size: var(--text-h3); color: var(--color-text); margin-bottom: var(--space-3);">Import Results</h3>
+    <h3 style="font-size: var(--text-h3); color: var(--color-text); margin-bottom: var(--space-1);">Import Results</h3>
+    <p style="font-size: var(--text-small); color: var(--color-text-muted); margin-bottom: var(--space-3);">
+      Job #{{ job.job_id }} · {{ job.get_source_display }}{% if job.source_name %} — {{ job.source_name }}{% endif %}
+      {% if job.finished_at %} · finished {{ job.finished_at|date:"Y-m-d H:i" }}{% endif %}
+      {% if job.duration_seconds %} · {{ job.duration_seconds|floatformat:1 }}s{% endif %}
+    </p>
 
     <div class="stat-grid" style="margin-bottom: var(--space-4);">
       <div class="stat-card">
-        <div class="stat-value">{{ stats.import.total }}</div>
-        <div class="stat-label">Rows Processed</div>
+        <div class="stat-value">{{ job.staging.rows_seen }}</div>
+        <div class="stat-label">CSV Rows Read</div>
       </div>
       <div class="stat-card">
-        <div class="stat-value">{{ stats.import.imported }}</div>
-        <div class="stat-label">Records Imported</div>
+        <div class="stat-value">{{ job.staging.staged }}</div>
+        <div class="stat-label">New Rows Staged</div>
       </div>
       <div class="stat-card">
-        <div class="stat-value">{{ stats.import.skipped }}</div>
-        <div class="stat-label">Skipped</div>
+        <div class="stat-value">{{ job.staging.duplicates }}</div>
+        <div class="stat-label">Duplicates Skipped</div>
       </div>
       <div class="stat-card">
-        <div class="stat-value">{{ stats.import.errors }}</div>
-        <div class="stat-label">Errors</div>
+        <div class="stat-value">{{ job.staging.failed }}</div>
+        <div class="stat-label">Staging Errors</div>
       </div>
     </div>
+    {% if job.staging.missing_id %}
+    <p style="font-size: var(--text-small); color: var(--color-text-muted); margin-top: calc(var(--space-4) * -1); margin-bottom: var(--space-4);">
+      {{ job.staging.missing_id }} rows had no award id and were not staged.
+    </p>
+    {% endif %}
 
+    {% if job.validation %}
     <div class="stat-grid" style="margin-bottom: var(--space-4);">
       <div class="stat-card">
-        <div class="stat-value">{{ stats.validation.total }}</div>
-        <div class="stat-label">Validated</div>
+        <div class="stat-value">{{ job.validation.rows_checked }}</div>
+        <div class="stat-label">Staged Rows Checked</div>
       </div>
       <div class="stat-card">
-        <div class="stat-value">{{ stats.validation.valid }}</div>
-        <div class="stat-label">Valid Records</div>
+        <div class="stat-value">{{ job.validation.valid }}</div>
+        <div class="stat-label">Valid</div>
       </div>
       <div class="stat-card">
-        <div class="stat-value">{{ stats.validation.invalid }}</div>
+        <div class="stat-value">{{ job.validation.invalid }}</div>
         <div class="stat-label">Rejected</div>
       </div>
       <div class="stat-card">
-        <div class="stat-value">{{ stats.validation.contracts_created }}</div>
-        <div class="stat-label">Contracts Created</div>
+        <div class="stat-value">{{ job.validation.import_failed }}</div>
+        <div class="stat-label">Insert Failures</div>
       </div>
     </div>
 
-    {% if stats.validation.errors %}
-    <div class="alert alert-warning">
-      <strong>{{ stats.validation.errors|length }} validation issues found.</strong>
-      Check the server log for details.
+    <div class="stat-grid" style="margin-bottom: var(--space-4);">
+      <div class="stat-card">
+        <div class="stat-value">{{ job.validation.contracts_created }}</div>
+        <div class="stat-label">Contracts Created</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ job.validation.contracts_existing }}</div>
+        <div class="stat-label">Already in Database</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ job.totals.contracts|default_if_none:"—" }}</div>
+        <div class="stat-label">Total Contracts</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">{{ job.totals.raw_records|default_if_none:"—" }}</div>
+        <div class="stat-label">Total Staged Rows</div>
+      </div>
+    </div>
+
+    {% if job.validation.validation_errors %}
+    <div class="alert alert-warning" style="margin-bottom: var(--space-3);">
+      <i class="bi bi-exclamation-triangle"></i>
+      <span><strong>{{ job.validation.validation_errors|length }} rows were rejected during validation.</strong>
+      Rejected rows stay in staging with their error details; see the server log for the full list.</span>
     </div>
     {% endif %}
 
+    {% if job.validation.import_failed %}
+    <div class="alert alert-error" style="margin-bottom: var(--space-3);">
+      <i class="bi bi-x-circle"></i>
+      <span><strong>{{ job.validation.import_failed }} valid rows could not be inserted.</strong>
+      They remain staged and will be retried by the next run. See the server log for details.</span>
+    </div>
+    {% else %}
     <div class="alert alert-success">
       <i class="bi bi-check-circle"></i>
-      Import completed successfully. {{ stats.validation.contracts_created }} contracts are now available for analysis.
+      <span>Import completed with no insert failures. {{ job.validation.contracts_created }} contracts created,
+      {{ job.validation.contracts_existing }} already present —
+      {{ job.totals.contracts|default_if_none:"—" }} contracts are now available for analysis.</span>
     </div>
+    {% endif %}
+    {% endif %}
   </div>
   {% endif %}
 </div>
@@ -121,4 +189,33 @@
     </ul>
   </div>
 </div>
+
+{% if job_active %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var statusUrl = "{% url 'ingestion:import_status' job.job_id %}";
+  var stageEl = document.getElementById('job-stage');
+  var badgeEl = document.getElementById('job-status-badge');
+
+  function poll() {
+    fetch(statusUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function(resp) { return resp.json(); })
+      .then(function(data) {
+        if (data.status === 'succeeded' || data.status === 'failed' || data.status === 'interrupted') {
+          window.location.reload();
+          return;
+        }
+        if (stageEl && data.stage) { stageEl.textContent = data.stage; }
+        if (badgeEl) {
+          if (data.stage) { badgeEl.title = data.stage; }
+          badgeEl.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
+        }
+        setTimeout(poll, 2000);
+      })
+      .catch(function() { setTimeout(poll, 5000); });
+  }
+  setTimeout(poll, 2000);
+});
+</script>
+{% endif %}
 {% endblock %}
